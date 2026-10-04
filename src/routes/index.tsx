@@ -16,6 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { cn } from "@/lib/utils";
 import { StockMonitor } from "@/components/StockMonitor";
 import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel, type Rep } from "@/lib/sosro-data";
+import { loadStock, type StockRow } from "@/lib/stock";
 import { fetchDms, parseDms, type DmsRow } from "@/lib/dms";
 type PackRow = (typeof PACKAGING)[number];
 type Outlet = { name: string; channel?: string | undefined; value: number };
@@ -63,7 +64,8 @@ function Dashboard() {
   const [loaded, setLoaded] = useState(false);
   const [sheets, setSheets] = useState<string[]>(["", "", "", ""]);
   const [dmsParts, setDmsParts] = useState<(DmsRow[] | null)[]>([null, null]);
-  const [syncMsg, setSyncMsg] = useState<string[]>(["", ""]);
+  const [syncMsg, setSyncMsg] = useState<string[]>(["", "", "", ""]);
+  const [stock, setStock] = useState<StockRow[] | null>(null);
   const dms = useMemo(() => (dmsParts[0] || dmsParts[1] ? [...(dmsParts[0] ?? []), ...(dmsParts[1] ?? [])] : null), [dmsParts]);
   const reps = useMemo<Rep[]>(() => {
     if (!dms) return REPS;
@@ -75,6 +77,10 @@ function Dashboard() {
   const loadSheet = async (i: number, src: string | File) => {
     setSyncMsg((s) => s.map((x, j) => (j === i ? "Sinkronisasi..." : x)));
     try {
+      if (i === 3) {
+        const st = await loadStock(src); setStock(st);
+        setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${st.length} SKU stok dimuat` : x))); return;
+      }
       const rows = typeof src === "string" ? await fetchDms(src) : await parseDms(src);
       setDmsParts((p) => p.map((x, j) => (j === i ? rows : x)));
       setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${rows.length.toLocaleString("id-ID")} baris dimuat` : x)));
@@ -90,7 +96,7 @@ function Dashboard() {
       if (d.targetAdj) setTargetAdj(d.targetAdj);
       if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
       if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
-      if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.slice(0, 2).forEach((u: string, i: number) => u && loadSheet(i, u)); }
+      if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.forEach((u: string, i: number) => u && i !== 2 && loadSheet(i, u)); }
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
@@ -228,7 +234,7 @@ function Dashboard() {
         </header>
 
         <main className="space-y-6 p-5 lg:p-8">
-          {view === "stock" && <StockMonitor cutoffLabel={cutLabel} />}
+          {view === "stock" && <StockMonitor cutoffLabel={cutLabel} stock={stock} dms={dms} />}
           {view === "exec" && tab === 0 && (
             <>
               <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`${month >= 9 ? `Q3 Closed & MTD ${perLabel}` : `Periode: ${perLabel}`} (vs Baseline ${year - 1})`} />
@@ -412,13 +418,13 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
               {(i !== 2 || mode === "link") && (
                 <div className="flex gap-2">
                   <div className="relative flex-1"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" value={sheets[i] ?? ""} onChange={(e) => setSheets(sheets.map((x, j) => (j === i ? e.target.value : x)))} placeholder="https://docs.google.com/spreadsheets/..." /></div>
-                  {i < 2 && <button disabled={!sheets[i]} onClick={() => onSync(i, sheets[i]!)} className="rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Sync</button>}
+                  {i !== 2 && <button disabled={!sheets[i]} onClick={() => onSync(i, sheets[i]!)} className="rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Sync</button>}
                 </div>
               )}
-              {i < 2 && (
+              {i !== 2 && (
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <label className="cursor-pointer rounded-lg border border-border bg-card px-2.5 py-1 font-semibold hover:border-primary/50">Unggah CSV<input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onSync(i, e.target.files[0])} /></label>
-                  <span className={cn(syncMsg[i]?.startsWith("✗") ? "text-danger" : syncMsg[i]?.startsWith("✓") ? "text-success" : "text-muted-foreground")}>{syncMsg[i] || "Kolom DMS: TANGGAL, BULAN, CHANNEL, NAMASALESMAN, NAMACUSTOMER, BRAND, NAMAPRODUK, NETAMOUNT, QTYSOLDCRT"}</span>
+                  <label className="cursor-pointer rounded-lg border border-border bg-card px-2.5 py-1 font-semibold hover:border-primary/50">{i === 3 ? "Unggah XLSX / CSV" : "Unggah CSV"}<input type="file" accept={i === 3 ? ".xlsx,.xls,.csv" : ".csv,text/csv"} className="hidden" onChange={(e) => e.target.files?.[0] && onSync(i, e.target.files[0])} /></label>
+                  <span className={cn(syncMsg[i]?.startsWith("✗") ? "text-danger" : syncMsg[i]?.startsWith("✓") ? "text-success" : "text-muted-foreground")}>{syncMsg[i] || (i === 3 ? "Header baris 7: Product Grup Level 3, Product Code, Product Name, Packaging, Stock, Stock (Pcs), Value @Selling" : "Kolom DMS: TANGGAL, BULAN, CHANNEL, NAMASALESMAN, NAMACUSTOMER, BRAND, NAMAPRODUK, NETAMOUNT, QTYSOLDCRT")}</span>
                 </div>
               )}
               {i === 2 && mode === "manual" && (
