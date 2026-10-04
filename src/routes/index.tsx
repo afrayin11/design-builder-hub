@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { StockMonitor } from "@/components/StockMonitor";
-import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
+import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel, type Rep } from "@/lib/sosro-data";
+import { fetchDms, parseDms, type DmsRow } from "@/lib/dms";
+type PackRow = (typeof PACKAGING)[number];
+type Outlet = { name: string; channel: string; value: number };
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,49 +61,113 @@ function Dashboard() {
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
   const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
   const [loaded, setLoaded] = useState(false);
+  const [sheets, setSheets] = useState<string[]>(["", "", "", ""]);
+  const [dmsParts, setDmsParts] = useState<(DmsRow[] | null)[]>([null, null]);
+  const [syncMsg, setSyncMsg] = useState<string[]>(["", ""]);
+  const dms = useMemo(() => (dmsParts[0] || dmsParts[1] ? [...(dmsParts[0] ?? []), ...(dmsParts[1] ?? [])] : null), [dmsParts]);
+  const reps = useMemo<Rep[]>(() => {
+    if (!dms) return REPS;
+    const extra = new Map<string, Rep>();
+    for (const r of dms) if (!REPS.some((x) => x.id === r.sales) && !extra.has(r.sales) && r.sales)
+      extra.set(r.sales, { id: r.sales, name: r.sales.replace(/\b\w+/g, (w) => w[0] + w.slice(1).toLowerCase()), channel: r.ch, badge: r.ch, weight: 1 });
+    return [...REPS, ...extra.values()];
+  }, [dms]);
+  const loadSheet = async (i: number, src: string | File) => {
+    setSyncMsg((s) => s.map((x, j) => (j === i ? "Sinkronisasi..." : x)));
+    try {
+      const rows = typeof src === "string" ? await fetchDms(src) : await parseDms(src);
+      setDmsParts((p) => p.map((x, j) => (j === i ? rows : x)));
+      setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${rows.length.toLocaleString("id-ID")} baris dimuat` : x)));
+    } catch (e) {
+      setSyncMsg((s) => s.map((x, j) => (j === i ? `✗ ${(e as Error).message}` : x)));
+    }
+  };
 
   useEffect(() => {
     try {
       const d = JSON.parse(localStorage.getItem("sosro-settings") || "{}");
-      if (d.selected) setSelected(d.selected); if (d.targetAdj) setTargetAdj(d.targetAdj);
+      if (Array.isArray(d.selected)) { const ok = d.selected.filter((s: string) => REPS.some((r) => r.id === s)); if (ok.length) setSelected(ok); }
+      if (d.targetAdj) setTargetAdj(d.targetAdj);
       if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
       if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
+      if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.slice(0, 2).forEach((u: string, i: number) => u && loadSheet(i, u)); }
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode }));
-  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today]);
+    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode, sheets }));
+  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today, sheets]);
+
+  const pickChannel = (c: Channel | "All") => { setChannel(c); setSelected(reps.filter((r) => c === "All" || r.channel === c).map((r) => r.id)); };
 
   const days = new Date(year, month + 1, 0).getDate();
   const cutDay = cutoff === "full" ? days : Math.min(today, days);
   const frac = cutDay / days;
   const cutLabel = `${cutDay} ${MONTHS[month]} ${year}`;
+
+  // Real DMS aggregation pipeline (null = fall back to mock data)
+  const agg = useMemo(() => {
+    if (!dms) return null;
+    const sel = new Set(selected);
+    const f = dms.filter((r) => sel.has(r.sales) && (channel === "All" || r.ch === channel));
+    const M = Array.from({ length: 12 }, () => ({ rtdR: 0, rtsR: 0, rtdLY: 0, rtsLY: 0 }));
+    const cats = Object.keys(CATEGORY_MAP) as PackCat[];
+    const P = Object.fromEntries(cats.map((c) => [c, { cat: c, brand: CATEGORY_MAP[c].join(" / "), mtdVol: 0, mtdVal: 0, ytdVol: 0, ytdVal: 0, lyYtdVal: 0, lyMtdVal: 0 }])) as Record<PackCat, PackRow>;
+    const cust = new Map<string, Outlet>();
+    let ytdTotal = 0;
+    for (const r of f) {
+      const i = r.m - 1;
+      if (i < 0 || i > month || (i === month && r.d > cutDay)) continue;
+      const cur = r.y === year, ly = r.y === year - 1;
+      if (!cur && !ly) continue;
+      const m = M[i]!;
+      if (cur) { if (r.rts) m.rtsR += r.amt; else m.rtdR += r.amt; } else { if (r.rts) m.rtsLY += r.amt; else m.rtdLY += r.amt; }
+      const p = r.cat ? P[r.cat] : null;
+      if (p) {
+        if (cur) { p.ytdVal += r.amt; p.ytdVol += r.ctn; if (i === month) { p.mtdVal += r.amt; p.mtdVol += r.ctn; } }
+        else { p.lyYtdVal += r.amt; if (i === month) p.lyMtdVal += r.amt; }
+      }
+      if (cur) {
+        ytdTotal += r.amt;
+        const o = cust.get(r.cust) ?? { name: r.cust, channel: r.ch, value: 0 };
+        o.value += r.amt; cust.set(r.cust, o);
+      }
+    }
+    const outlets = [...cust.values()].sort((a, b) => b.value - a.value).slice(0, 15);
+    return { M, pack: cats.map((c) => P[c]), outlets, ytdTotal };
+  }, [dms, selected, channel, year, month, cutDay]);
+
   const yd = useMemo(() => monthly.map((m, i) => {
+    const a = agg?.M[i];
     const base = year === 2026
-      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: m.rtdReal, rtsR: m.rtsReal, rtdLY: m.rtdLY, rtsLY: m.rtsLY }
+      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: a ? a.rtdR : m.rtdReal, rtsR: a ? a.rtsR : m.rtsReal, rtdLY: a ? a.rtdLY : m.rtdLY, rtsLY: a ? a.rtsLY : m.rtsLY }
+      : a ? { rtdT: a.rtdLY * 1.05, rtsT: a.rtsLY * 1.05, rtdR: a.rtdR, rtsR: a.rtsR, rtdLY: a.rtdLY, rtsLY: a.rtsLY }
       : { rtdT: m.rtdLY * 1.05, rtsT: m.rtsLY * 1.05, rtdR: m.rtdLY, rtsR: m.rtsLY, rtdLY: m.rtdLY * 0.92, rtsLY: m.rtsLY * 0.92 };
     if (i > month) return { ...base, rtdR: 0, rtsR: 0 };
-    if (i === month && frac < 1) return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
+    if (i === month && frac < 1) {
+      if (a) return { ...base, rtdT: base.rtdT * frac, rtsT: base.rtsT * frac };
+      return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
+    }
     return base;
-  }), [year, month, frac, targets]);
+  }), [year, month, frac, targets, agg]);
 
   const factor = useMemo(() => {
+    if (agg) return 1;
     const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
     return w / TOTAL_WEIGHT;
-  }, [selected, channel]);
+  }, [selected, channel, agg]);
 
   const rows = useMemo(() => monthly.map((m) => {
     const d = yd[monthly.indexOf(m)]!;
     const t = cat === "rtd" ? d.rtdT : cat === "rts" ? d.rtsT : d.rtdT + d.rtsT;
     const r = cat === "rtd" ? d.rtdR : cat === "rts" ? d.rtsR : d.rtdR + d.rtsR;
     const target = t * factor * (targetAdj / 100), real = r * factor;
-    return { month: m.month, target, real: real || null, ach: real ? +(real / target * 100).toFixed(1) : null };
+    return { month: m.month, target, real: real || null, ach: real && target ? +(real / target * 100).toFixed(1) : null };
   }), [factor, cat, targetAdj, yd]);
 
   const cm = yd[month]!;
   const real = (cm.rtdR + cm.rtsR) * factor;
-  const target = (cm.rtdT + cm.rtsT) * factor * (targetAdj / 100);
+  const target = (cm.rtdT + cm.rtsT) * factor * (targetAdj / 100) || 1;
   const ly = (cm.rtdLY + cm.rtsLY) * factor;
   const gap = real - target, growth = ly ? real / ly - 1 : 0;
   const rtdShare = real ? cm.rtdR * factor / real : 0;
