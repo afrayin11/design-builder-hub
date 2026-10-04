@@ -46,24 +46,36 @@ function parseDate(v: string): { y: number; m: number; d: number } | null {
   return b > 12 ? { y, m: a, d: b } : { y, m: b, d: a };
 }
 
+const RTS_KEYS = ["GUNUNG SLAMAT", "BOTOL BIRU", "BOTOL HIJAU", "POCI", "CELUP"];
+
 function mapRow(r: Record<string, string>): DmsRow | null {
   const g = (k: string) => r[k] ?? "";
-  const dt = parseDate(g("TANGGAL"));
+  let dt = parseDate(g("TANGGAL"));
+  if (!dt) {
+    const tb = g("TAHUN-BULAN").match(/(\d{4})\D*(\d{1,2})/);
+    if (tb) dt = { y: +tb[1]!, m: +tb[2]!, d: 1 };
+  }
   const bulan = num(g("BULAN"));
   if (!dt && !bulan) return null;
   const m = bulan >= 1 && bulan <= 12 ? bulan : dt!.m;
   const brand = g("BRAND") || g("PRODUCTGROUP3");
   const cls = `${g("BRAND")} ${g("PRODUCTGROUP3")} ${g("NAMAPRODUK")} ${g("PACKAGING")}`;
-  const amt = num(g("NETAMOUNT")) || num(g("DPP"));
+  // Revenue basis = DPP (excl. 11% PPN); fallback NETAMOUNT / 1.11
+  const dppRaw = g("DPP").trim();
+  let amt = dppRaw ? num(dppRaw) : num(g("NETAMOUNT")) / 1.11;
+  const tipe = g("TIPETRANS").toLowerCase();
+  const isReturn = /retur/.test(tipe);
+  if (isReturn && amt > 0) amt = -amt; // returns reduce net sales (no double-negation)
   const sales = g("NAMASALESMAN") || g("KODESALESMAN");
   const master = masterOf(sales);
-  const rts = cls.toUpperCase().includes("GUNUNG SLAMAT");
+  const up = cls.toUpperCase();
+  const rts = RTS_KEYS.some((k) => up.includes(k));
   return {
     y: dt?.y ?? new Date().getFullYear(), m, d: dt?.d ?? 1,
     ch: master?.channel ?? classifyChannel(g("CHANNEL")),
     sales: salesId(sales), cust: g("NAMACUSTOMER") || g("KODECUSTOMER"), sku: g("NAMAPRODUK") || g("KODEPRODUK"),
     brand, cat: rts ? "RTS" : classifyBrand(cls), rts, amt, ctn: num(g("QTYSOLDCRT")) || num(g("QTYSOLD")),
-    code: g("KODEPRODUK").trim(), sale: amt > 0 && (!g("TIPETRANS") || g("TIPETRANS").toLowerCase().includes("sales")),
+    code: g("KODEPRODUK").trim(), sale: !isReturn && amt > 0 && (!tipe || tipe.includes("sales")),
   };
 }
 
