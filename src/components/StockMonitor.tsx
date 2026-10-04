@@ -26,8 +26,9 @@ const MOCK: StockRow[] = STOCK.map((s) => {
 const MOCK_AVG = Object.fromEntries(STOCK.map((s) => [s.code, { a3: s.avg, a6: s.avg * 0.93 }]));
 const MOCK_BDP = Object.fromEntries(STOCK.map((s) => [s.code, s.bdp]));
 
-export function StockMonitor({ cutoffLabel, stock, dms }: { cutoffLabel: string; stock: StockRow[] | null; dms: DmsRow[] | null }) {
-  const [q, setQ] = useState("");
+export function StockMonitor({ cutoffLabel, stock, dms, search }: { cutoffLabel: string; stock: StockRow[] | null; dms: DmsRow[] | null; search?: string }) {
+  const [q, setQ] = useState(search ?? "");
+  useEffect(() => { if (search != null) setQ(search); }, [search]);
   const [group, setGroup] = useState<string>("All");
   const [status, setStatus] = useState<Status>("all");
   const [macro, setMacro] = useState<"all" | "RTD" | "RTS">("all");
@@ -103,14 +104,14 @@ export function StockMonitor({ cutoffLabel, stock, dms }: { cutoffLabel: string;
         <div><h2 className="font-display text-xl font-semibold">Monitoring Stok & DOI Depo</h2><p className="text-sm text-muted-foreground">Posisi Stok per Tanggal: <span className="font-semibold text-primary">{cutoffLabel}</span> · target DOI {TARGET_DOI} hari · {stock ? `File stok DMS (${stock.length} SKU)` : "Data contoh"} · AVG {dms ? "dari transaksi DMS" : "contoh"}</p></div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-5">
         {kpis.map((k) => (
-          <div key={k.label} className={cn("glass-card p-5", k.danger && critical > 0 && "border-danger/40")}>
+          <div key={k.label} className={cn("glass-card p-4 sm:p-5", k.danger && critical > 0 && "border-danger/40")}>
             <div className="flex items-center gap-2.5">
               <span className={cn("grid h-8 w-8 place-items-center rounded-xl bg-surface", k.danger ? "text-danger" : "text-primary")}><k.icon className="h-4 w-4" /></span>
               <span className="text-sm font-medium text-muted-foreground">{k.label}</span>
             </div>
-            <p className={cn("mt-4 whitespace-nowrap font-display text-2xl font-semibold", k.danger && critical > 0 && "text-danger")}>{k.v}</p>
+            <p className={cn("mt-4 whitespace-nowrap font-display text-lg font-bold sm:text-2xl", k.danger && critical > 0 && "text-danger")}>{k.v}</p>
           </div>
         ))}
       </div>
@@ -147,7 +148,7 @@ export function StockMonitor({ cutoffLabel, stock, dms }: { cutoffLabel: string;
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-10 bg-card text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="px-3 py-2.5 text-left">Kode</th><th className="px-3 text-left">Nama Produk</th><th className="px-3 text-left">Kemasan</th>
+                <th className="sticky left-0 z-10 bg-card px-3 py-2.5 text-left">Kode</th><th className="px-3 text-left">Nama Produk</th><th className="px-3 text-left">Kemasan</th>
                 {["Harga / CTN", "Stock CTN", "BDP (edit)", "Stock PCS", "Stok Efektif", `AVG/Hari (${basis === "a3" ? "3M" : "6M"})`, "DOI", "Permintaan CTN", "Total Nilai Stok"].map((h) => <th key={h} className={c}>{h}</th>)}
               </tr>
             </thead>
@@ -167,7 +168,7 @@ export function StockMonitor({ cutoffLabel, stock, dms }: { cutoffLabel: string;
                       const st = s.avg ? STATUS_META[statusOf(s.doi)] : null;
                       return (
                         <tr key={s.code} className="border-t border-border/60 hover:bg-surface/40">
-                          <td className="px-3 py-2.5 font-mono font-semibold">{s.code}</td>
+                          <td className="sticky left-0 bg-card px-3 py-2.5 font-mono font-semibold">{s.code}</td>
                           <td className="whitespace-nowrap px-3">{s.name}</td>
                           <td className="whitespace-nowrap px-3 text-muted-foreground">{s.pack}</td>
                           <td className={c}>{s.ctn ? rp(s.value / s.ctn) : "–"}</td>

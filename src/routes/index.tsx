@@ -62,6 +62,7 @@ function Dashboard() {
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
   const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
   const [loaded, setLoaded] = useState(false);
+  const [search, setSearch] = useState("");
   const [sheets, setSheets] = useState<string[]>(["", "", "", ""]);
   const [dmsParts, setDmsParts] = useState<(DmsRow[] | null)[]>([null, null]);
   const [syncMsg, setSyncMsg] = useState<string[]>(["", "", "", ""]);
@@ -199,21 +200,31 @@ function Dashboard() {
 
       <div className="flex-1 min-w-0">
         <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center gap-3 px-5 py-4 lg:px-8">
-            <div className="mr-auto">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Executive Monitoring</p>
-              <h1 className="font-display text-xl font-semibold lg:text-2xl">Sosro Distribution <span className="text-primary">Command Center</span></h1>
+          <div className="flex flex-wrap items-center gap-3 px-4 pt-4 pb-3 sm:px-5 lg:px-8">
+            <div className="flex w-full min-w-0 items-center gap-3 md:mr-auto md:w-auto">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground glow-primary md:hidden"><Activity className="h-5 w-5" /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:text-xs"><span className="sm:hidden">Sosro · </span>Executive Monitoring</p>
+                <h1 className="truncate font-display text-lg font-bold sm:text-xl lg:text-2xl"><span className="hidden sm:inline">Sosro Distribution </span><span className="text-primary">Command Center</span></h1>
+              </div>
+              <span className="shrink-0 rounded-full bg-accent-gold/15 px-3 py-1 text-xs font-bold text-accent-gold md:hidden">{MONTHS[month]} {year}</span>
+              <button onClick={() => setSettingsOpen(true)} aria-label="Data & Target" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-card md:hidden"><Settings className="h-4 w-4 text-primary" /></button>
             </div>
-            <div className="flex rounded-full border border-border bg-card p-1">
+            <div className="relative w-full md:hidden">
+              <Search className="absolute left-4 top-3 h-4 w-4 text-muted-foreground" />
+              <input value={search} onChange={(e) => { setSearch(e.target.value); if (e.target.value && view === "exec" && tab !== 2) setView("stock"); }} placeholder="Cari produk, salesman, outlet..."
+                className="h-10 w-full rounded-full border border-border bg-card pl-10 pr-4 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus:border-primary" />
+            </div>
+            <div className="no-scrollbar flex max-w-full overflow-x-auto rounded-full border border-border bg-card p-1 shadow-sm">
               {(["All", ...CHANNELS] as const).map((c) => (
                 <button key={c} onClick={() => pickChannel(c)}
-                  className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors", channel === c ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{c}</button>
+                  className={cn("shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors", channel === c ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{c}</button>
               ))}
             </div>
             <RepPicker reps={reps} selected={selected} setSelected={setSelected} />
-            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} sheets={sheets} setSheets={setSheets} onSync={loadSheet} syncMsg={syncMsg} />
+            <div className="hidden md:block"><SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} sheets={sheets} setSheets={setSheets} onSync={loadSheet} syncMsg={syncMsg} /></div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 px-5 pb-3 lg:px-8">
+          <div className="no-scrollbar flex items-center gap-2 overflow-x-auto px-4 pb-3 sm:px-5 md:flex-wrap lg:px-8 [&>*]:shrink-0">
             <CalendarDays className="h-4 w-4 text-primary" />
             <select aria-label="Filter Tahun" value={year} onChange={(e) => setYear(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{YEARS.map((y) => <option key={y} value={y}>{y}</option>)}</select>
             <select aria-label="Filter Bulan" value={month} onChange={(e) => setMonth(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{MONTHS_ID.map((m, i) => <option key={m} value={i}>{m}</option>)}</select>
@@ -225,42 +236,41 @@ function Dashboard() {
             <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">Cut-off per: {cutLabel}</span>
             <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", dms ? "bg-success/15 text-success" : "bg-surface text-muted-foreground")}>{dms ? `Data DMS · ${dms.length.toLocaleString("id-ID")} baris` : "Data contoh (sheet belum terhubung)"}</span>
           </div>
-          <div className="flex flex-wrap gap-1 px-5 pb-3 lg:px-8">
-            <button onClick={() => setView(view === "exec" ? "stock" : "exec")} className="rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground md:hidden">{view === "exec" ? "→ Stok & DOI" : "→ Dashboard"}</button>
+          <div className="hidden flex-wrap gap-1 px-5 pb-3 md:flex lg:px-8">
             {view === "exec" && ["Performance", "Brand & Packaging", "Pareto"].map((t, i) => (
               <button key={t} onClick={() => setTab(i)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", tab === i ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>{t}</button>
             ))}
           </div>
         </header>
 
-        <main className="space-y-6 p-5 lg:p-8">
-          {view === "stock" && <StockMonitor cutoffLabel={cutLabel} stock={stock} dms={dms} />}
+        <main className="space-y-5 p-4 pb-28 sm:p-5 md:space-y-6 md:pb-8 lg:p-8">
+          {view === "stock" && <StockMonitor cutoffLabel={cutLabel} stock={stock} dms={dms} search={search} />}
           {view === "exec" && tab === 0 && (
             <>
               <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`${month >= 9 ? `Q3 Closed & MTD ${perLabel}` : `Periode: ${perLabel}`} (vs Baseline ${year - 1})`} />
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="glass-card relative overflow-hidden p-5 glow-primary">
+              <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+                <div className="glass-card relative overflow-hidden p-4 sm:p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
-                  <p className="mt-4 whitespace-nowrap font-display text-3xl font-semibold" title={rpFull(real)}>{fmt(real)}</p>
+                  <p className="mt-4 whitespace-nowrap font-display text-xl font-bold sm:text-3xl" title={rpFull(real)}>{fmt(real)}</p>
                   <p className="whitespace-nowrap text-sm text-muted-foreground" title={rpFull(target)}>dari {fmt(target)}</p>
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
                     <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (real / target) * 100)}%` }} />
                   </div>
                   <p className="mt-2 text-xs font-semibold text-primary">{pct(real / target)} Ach</p>
                 </div>
-                <div className="glass-card p-5">
+                <div className="glass-card p-4 sm:p-5">
                   <CardHead icon={Wallet} label="Net Gap Value" />
-                  <p className={cn("mt-4 whitespace-nowrap font-display text-3xl font-semibold", gap < 0 ? "text-danger" : "text-success")} title={rpFull(gap)}>{fmt(gap)}</p>
+                  <p className={cn("mt-4 whitespace-nowrap font-display text-xl font-bold sm:text-3xl", gap < 0 ? "text-danger" : "text-success")} title={rpFull(gap)}>{fmt(gap)}</p>
                   <span className={cn("mt-3 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold", gap < 0 ? "bg-danger/15 text-danger" : "bg-success/15 text-success")}>
                     {gap < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}{gap < 0 ? "Defisit" : "Surplus"}
                   </span>
                 </div>
-                <div className="glass-card p-5">
+                <div className="glass-card p-4 sm:p-5">
                   <CardHead icon={TrendingUp} label="Growth YoY (bulan)" />
-                  <p className={cn("mt-4 font-display text-3xl font-semibold", growth < 0 ? "text-danger" : "text-success")}>{growth >= 0 ? "+" : ""}{pct(growth)}</p>
+                  <p className={cn("mt-4 font-display text-xl font-bold sm:text-3xl", growth < 0 ? "text-danger" : "text-success")}>{growth >= 0 ? "+" : ""}{pct(growth)}</p>
                   <p className="mt-1 whitespace-nowrap text-sm text-muted-foreground">{year} vs {year - 1} · {fmt(ly)} LY</p>
                 </div>
-                <div className="glass-card p-5">
+                <div className="glass-card p-4 sm:p-5">
                   <CardHead icon={Scale} label="RTD vs RTS Share" />
                   <div className="mt-4 flex items-end justify-between font-display">
                     <span className="text-3xl font-semibold text-primary">{Math.round(rtdShare * 100)}%</span>
@@ -315,12 +325,24 @@ function Dashboard() {
             <>
               <SectionTitle n="03" title="Top 15 Pareto Outlet" sub={`Top 15 Pareto s/d ${perLabel}`} />
               <div className="glass-card overflow-x-auto p-5 hover:translate-y-0">
-                <ParetoTable factor={factor * yScale} outlets={agg?.outlets} total={agg?.ytdTotal} />
+                <ParetoTable factor={factor * yScale} outlets={agg?.outlets} total={agg?.ytdTotal} search={search} />
               </div>
             </>
           )}
         </main>
       </div>
+      {/* SSR always renders this; md:hidden handles desktop */}
+      <nav className="fixed inset-x-3 bottom-3 z-40 flex items-center justify-between rounded-3xl border border-border bg-card/90 p-1.5 shadow-elevated backdrop-blur-xl md:hidden">
+        {([["Dashboard", LayoutDashboard, view === "exec" && tab === 0, () => { setView("exec"); setTab(0); }],
+          ["Brand", PieIcon, view === "exec" && tab === 1, () => { setView("exec"); setTab(1); }],
+          ["Pareto", TrendingUp, view === "exec" && tab === 2, () => { setView("exec"); setTab(2); }],
+          ["Stok Depo", Warehouse, view === "stock", () => setView("stock")],
+          ["Target", Settings, settingsOpen, () => setSettingsOpen(true)]] as const).map(([l, I, on, fn]) => (
+          <button key={l} onClick={fn} className={cn("flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-2 text-[10px] font-semibold transition-colors", on ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground")}>
+            <I className="h-5 w-5" />{l}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
@@ -595,7 +617,7 @@ function DetailTable({ yd, month, factor, adj }: { yd: YD[]; month: number; fact
   );
 }
 
-function ParetoTable({ factor, outlets, total: realTotal }: { factor: number; outlets?: Outlet[] | undefined; total?: number | undefined }) {
+function ParetoTable({ factor, outlets, total: realTotal, search = "" }: { factor: number; outlets?: Outlet[] | undefined; total?: number | undefined; search?: string }) {
   const list: Outlet[] = outlets ?? OUTLETS;
   const f = outlets ? 1 : factor;
   const total = (outlets ? realTotal || 1 : OUTLETS.reduce((a, o) => a + o.value, 0) / 0.62);
@@ -608,6 +630,7 @@ function ParetoTable({ factor, outlets, total: realTotal }: { factor: number; ou
       <tbody>
         {list.map((o, i) => {
           const s = o.value / total; cum += s;
+          if (search && !o.name.toLowerCase().includes(search.toLowerCase())) return null;
           return (
             <tr key={o.name} className="border-b border-border/60 hover:bg-surface/50">
               <td className="py-2.5 font-display font-semibold text-muted-foreground">{String(i + 1).padStart(2, "0")}</td>
