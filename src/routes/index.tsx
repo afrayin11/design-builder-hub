@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   Activity, BarChart3, ChevronDown, Gauge, LayoutDashboard, PieChart as PieIcon, Search, Settings,
-  Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, Scale, Link2, Warehouse,
+  Table2, Target, TrendingDown, TrendingUp, Users, Wallet, Scale, Link2, Warehouse,
 } from "lucide-react";
 import {
   Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
