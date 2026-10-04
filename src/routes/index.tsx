@@ -61,6 +61,7 @@ function Dashboard() {
   const [today, setToday] = useState(4);
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
   const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
+  const [scoped, setScoped] = useState<Record<string, Tg>>({});
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [sheets, setSheets] = useState<string[]>(["", "", "", ""]);
@@ -96,14 +97,14 @@ function Dashboard() {
       if (Array.isArray(d.selected)) { const ok = d.selected.filter((s: string) => REPS.some((r) => r.id === s)); if (ok.length) setSelected(ok); }
       if (d.targetAdj) setTargetAdj(d.targetAdj);
       if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
-      if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
+      if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode); if (d.scoped && typeof d.scoped === "object") setScoped(d.scoped);
       if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.forEach((u: string, i: number) => u && i !== 2 && loadSheet(i, u)); }
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode, sheets }));
-  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today, sheets]);
+    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode, sheets, scoped }));
+  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today, sheets, scoped]);
 
   const pickChannel = (c: Channel | "All") => { setChannel(c); setSelected(reps.filter((r) => c === "All" || r.channel === c).map((r) => r.id)); };
 
@@ -144,10 +145,33 @@ function Dashboard() {
     return { M, pack: cats.map((c) => P[c]), outlets, ytdTotal };
   }, [dms, selected, channel, year, month, cutDay]);
 
+  const factor = useMemo(() => {
+    if (agg) return 1;
+    const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
+    return w / TOTAL_WEIGHT;
+  }, [selected, channel, agg]);
+
+  // Scoped targets: ALL when every rep selected, else sum per-salesman targets (fallback: weight share of ALL)
+  const { effTargets, missingTarget } = useMemo(() => {
+    const act = reps.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel));
+    if (channel === "All" && act.length === reps.length) return { effTargets: targets, missingTarget: [] as string[] };
+    const missing: string[] = [];
+    const sum = targets.map(() => ({ rtd: 0, rts: 0 }));
+    for (const r of act) {
+      const own = scoped[r.id];
+      const has = own && own.some((t) => t.rtd || t.rts);
+      if (!has) missing.push(r.name);
+      const w = (REPS.find((x) => x.id === r.id)?.weight ?? 0) / TOTAL_WEIGHT;
+      targets.forEach((t, i) => { const o = has ? own![i]! : { rtd: t.rtd * w, rts: t.rts * w }; sum[i]!.rtd += o.rtd; sum[i]!.rts += o.rts; });
+    }
+    const k = factor || 1; // later multiplied by factor in mock mode
+    return { effTargets: sum.map((t) => ({ rtd: t.rtd / k, rts: t.rts / k })), missingTarget: missing };
+  }, [reps, selected, channel, targets, scoped, factor]);
+
   const yd = useMemo(() => monthly.map((m, i) => {
     const a = agg?.M[i];
     const base = year === 2026
-      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: a ? a.rtdR : m.rtdReal, rtsR: a ? a.rtsR : m.rtsReal, rtdLY: a ? a.rtdLY : m.rtdLY, rtsLY: a ? a.rtsLY : m.rtsLY }
+      ? { rtdT: effTargets[i]!.rtd, rtsT: effTargets[i]!.rts, rtdR: a ? a.rtdR : m.rtdReal, rtsR: a ? a.rtsR : m.rtsReal, rtdLY: a ? a.rtdLY : m.rtdLY, rtsLY: a ? a.rtsLY : m.rtsLY }
       : a ? { rtdT: a.rtdLY * 1.05, rtsT: a.rtsLY * 1.05, rtdR: a.rtdR, rtsR: a.rtsR, rtdLY: a.rtdLY, rtsLY: a.rtsLY }
       : { rtdT: m.rtdLY * 1.05, rtsT: m.rtsLY * 1.05, rtdR: m.rtdLY, rtsR: m.rtsLY, rtdLY: m.rtdLY * 0.92, rtsLY: m.rtsLY * 0.92 };
     if (i > month) return { ...base, rtdR: 0, rtsR: 0 };
@@ -156,13 +180,7 @@ function Dashboard() {
       return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
     }
     return base;
-  }), [year, month, frac, targets, agg]);
-
-  const factor = useMemo(() => {
-    if (agg) return 1;
-    const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
-    return w / TOTAL_WEIGHT;
-  }, [selected, channel, agg]);
+  }), [year, month, frac, effTargets, agg]);
 
   const rows = useMemo(() => monthly.map((m) => {
     const d = yd[monthly.indexOf(m)]!;
@@ -222,7 +240,7 @@ function Dashboard() {
               ))}
             </div>
             <RepPicker reps={reps} selected={selected} setSelected={setSelected} />
-            <div className="hidden md:block"><SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} sheets={sheets} setSheets={setSheets} onSync={loadSheet} syncMsg={syncMsg} /></div>
+            <div className="hidden md:block"><SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} scoped={scoped} setScoped={setScoped} reps={reps} mode={targetMode} setMode={setTargetMode} sheets={sheets} setSheets={setSheets} onSync={loadSheet} syncMsg={syncMsg} /></div>
           </div>
           <div className="no-scrollbar flex items-center gap-2 overflow-x-auto px-4 pb-3 sm:px-5 md:flex-wrap lg:px-8 [&>*]:shrink-0">
             <CalendarDays className="h-4 w-4 text-primary" />
@@ -248,6 +266,12 @@ function Dashboard() {
           {view === "exec" && tab === 0 && (
             <>
               <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`${month >= 9 ? `Q3 Closed & MTD ${perLabel}` : `Periode: ${perLabel}`} (vs Baseline ${year - 1})`} />
+              {year === 2026 && missingTarget.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-semibold text-warning">
+                  <Target className="h-4 w-4" />Target spesifik belum diisi ({missingTarget.join(", ")}) - menggunakan proporsi baseline atau isi di Pengaturan
+                  <button onClick={() => setSettingsOpen(true)} className="ml-auto rounded-full bg-warning px-3 py-0.5 text-[11px] font-bold text-background">Isi Target</button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
                 <div className="glass-card relative overflow-hidden p-4 sm:p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
@@ -416,9 +440,18 @@ function RepPicker({ reps, selected, setSelected }: { reps: Rep[]; selected: str
 }
 
 type Tg = { rtd: number; rts: number }[];
-function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, mode, setMode, sheets, setSheets, onSync, syncMsg }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void; sheets: string[]; setSheets: (s: string[]) => void; onSync: (i: number, src: string | File) => void; syncMsg: string[] }) {
+const SALES_CODE: Record<string, string> = { NANANG: "CCR0002", NOVITA: "SSMP004", "NKA SOS": "SSMP005", BACHTIAR: "SSMP001", EDY: "SSMP002", FITRI: "SSMP003" };
+const SALES_LABEL: Record<string, string> = { NANANG: "NANANG SOS", NOVITA: "NOVITA 8 OKT 24", "NKA SOS": "NKA SOS", BACHTIAR: "BAHTIAR SOS", EDY: "EDY YUNUS TGL2 NOV24", FITRI: "FITRI YANI" };
+function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, scoped, setScoped, reps, mode, setMode, sheets, setSheets, onSync, syncMsg }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; scoped: Record<string, Tg>; setScoped: (s: Record<string, Tg>) => void; reps: Rep[]; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void; sheets: string[]; setSheets: (s: string[]) => void; onSync: (i: number, src: string | File) => void; syncMsg: string[] }) {
   const slots = ["URL Google Sheets: Data Tahunan (2025 Baseline)", "URL Google Sheets: Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD / RTS)", "URL Google Sheets: Monitoring Stok & DOI Depo"];
-  const edit = (i: number, k: "rtd" | "rts", v: string) => setTargets(targets.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, cleanNum(v)) } : t)));
+  const [scope, setScope] = useState("ALL");
+  const scopeRep = reps.find((r) => r.id === scope);
+  const hasOwn = !!scoped[scope]?.some((t) => t.rtd || t.rts);
+  const grid: Tg = scope === "ALL" ? targets : scoped[scope] ?? targets.map(() => ({ rtd: 0, rts: 0 }));
+  const edit = (i: number, k: "rtd" | "rts", v: string) => {
+    const next = grid.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, cleanNum(v)) } : t));
+    if (scope === "ALL") setTargets(next); else setScoped({ ...scoped, [scope]: next });
+  };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground glow-primary">
@@ -451,9 +484,19 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
               )}
               {i === 2 && mode === "manual" && (
                 <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select aria-label="Target Scope" value={scope} onChange={(e) => setScope(e.target.value)} className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground">
+                      <option value="ALL">Total Depo (Konsolidasi Seluruh Salesman)</option>
+                      {reps.map((r) => <option key={r.id} value={r.id}>{SALES_CODE[r.id] ? `${SALES_CODE[r.id]} - ${SALES_LABEL[r.id]}` : r.name} ({r.badge})</option>)}
+                    </select>
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", scope === "ALL" ? "bg-primary/15 text-primary" : "bg-accent/15 text-accent")}>
+                      Editing: {scope === "ALL" ? "TOTAL DEPO" : `${scopeRep?.name ?? scope} · ${scopeRep?.badge ?? ""}`}
+                    </span>
+                    {scope !== "ALL" && !hasOwn && <span className="text-[11px] text-warning">Belum diisi — memakai proporsi baseline</span>}
+                  </div>
                   <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(9rem,1fr)] gap-1.5 text-xs">
                     <span /><span className="text-muted-foreground">Target RTD (Rp)</span><span className="text-muted-foreground">Target RTS (Rp)</span>
-                    {targets.map((t, j) => (
+                    {grid.map((t, j) => (
                       <Fragment key={j}>
                         <span className="self-center font-semibold">{MONTHS[j]}</span>
                         <Input className="h-8 text-right tabular-nums" inputMode="numeric" title={rpFull(t.rtd)} value={Math.round(t.rtd).toLocaleString("id-ID")} onChange={(e) => edit(j, "rtd", e.target.value)} />
