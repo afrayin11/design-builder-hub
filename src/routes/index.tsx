@@ -84,7 +84,7 @@ function Dashboard() {
         setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${st.length} SKU stok dimuat` : x))); return;
       }
       const rows = typeof src === "string" ? await fetchDms(src) : await parseDms(src);
-      setDmsParts((p) => p.map((x, j) => (j === i ? rows : x)));
+      setDmsParts((p) => { const n = p.map((x, j) => (j === i ? rows : x)); saveSummary(n.flatMap((x) => (x ? x.filter((r) => !r.only) : []))); return n; });
       setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${rows.length.toLocaleString("id-ID")} baris dimuat` : x)));
     } catch (e) {
       setSyncMsg((s) => s.map((x, j) => (j === i ? `✗ ${(e as Error).message}` : x)));
@@ -99,6 +99,7 @@ function Dashboard() {
       if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
       if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode); if (d.scoped && typeof d.scoped === "object") setScoped(d.scoped);
       if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.forEach((u: string, i: number) => u && i !== 2 && loadSheet(i, u)); }
+      const saved = loadSummary(); if (saved?.length) setDmsParts([saved, null]);
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
@@ -128,6 +129,7 @@ function Dashboard() {
       if (i < 0 || i > month || (i === month && r.d > cutDay)) continue;
       const cur = r.y === year, ly = r.y === year - 1;
       if (!cur && !ly) continue;
+      if (r.only === "c") { if (cur) { ytdTotal += 0; const o = cust.get(r.cust) ?? { name: r.cust, channel: r.ch, value: 0 }; o.value += r.amt; cust.set(r.cust, o); } continue; }
       const m = M[i]!;
       if (cur) { if (r.rts) m.rtsR += r.amt; else m.rtdR += r.amt; } else { if (r.rts) m.rtsLY += r.amt; else m.rtdLY += r.amt; }
       const p = r.cat ? P[r.cat] : null;
@@ -137,6 +139,7 @@ function Dashboard() {
       }
       if (cur) {
         ytdTotal += r.amt;
+        if (r.only) continue;
         const o = cust.get(r.cust) ?? { name: r.cust, channel: r.ch, value: 0 };
         o.value += r.amt; cust.set(r.cust, o);
       }

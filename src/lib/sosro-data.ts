@@ -30,6 +30,8 @@ export const monthly = MONTHS.map((m, i) => ({
   rtdReal: rtdR[i] ? rtdR[i]! * JT + ((i + 3) * 7919337) % 999983 : 0, rtsReal: rtsR[i] ? rtsR[i]! * JT + ((i + 5) * 3571129) % 999979 : 0,
   rtdLY: rtdLY[i]! * JT, rtsLY: rtsLY[i]! * JT,
 }));
+// Authentic January baseline (raw DPP, no division)
+Object.assign(monthly[0]!, { rtdTarget: 448604205, rtsTarget: 153043566, rtdReal: 287255797, rtsReal: 76095566, rtdLY: 541197316, rtsLY: 60621203 });
 
 export const BRANDS = [
   { name: "Teh Botol Sosro", value: 42 },
