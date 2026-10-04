@@ -204,8 +204,8 @@ function Dashboard() {
             <div className="flex w-full min-w-0 items-center gap-3 md:mr-auto md:w-auto">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground glow-primary md:hidden"><Activity className="h-5 w-5" /></div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:text-xs">Executive Monitoring</p>
-                <h1 className="truncate font-display text-lg font-bold sm:text-xl lg:text-2xl"><span className="hidden sm:inline">Sosro Distribution </span><span className="sm:hidden">Sosro </span><span className="text-primary">Command Center</span></h1>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:text-xs"><span className="sm:hidden">Sosro · </span>Executive Monitoring</p>
+                <h1 className="truncate font-display text-lg font-bold sm:text-xl lg:text-2xl"><span className="hidden sm:inline">Sosro Distribution </span><span className="text-primary">Command Center</span></h1>
               </div>
               <span className="shrink-0 rounded-full bg-accent-gold/15 px-3 py-1 text-xs font-bold text-accent-gold md:hidden">{MONTHS[month]} {year}</span>
               <button onClick={() => setSettingsOpen(true)} aria-label="Data & Target" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-card md:hidden"><Settings className="h-4 w-4 text-primary" /></button>
