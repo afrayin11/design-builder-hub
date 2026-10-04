@@ -26,9 +26,9 @@ export const CLOSED_MONTHS = 7;
 const JT = 1_000_000;
 export const monthly = MONTHS.map((m, i) => ({
   month: m,
-  rtdTarget: rtdT[i] * JT, rtsTarget: rtsT[i] * JT,
-  rtdReal: rtdR[i] * JT, rtsReal: rtsR[i] * JT,
-  rtdLY: rtdLY[i] * JT, rtsLY: rtsLY[i] * JT,
+  rtdTarget: rtdT[i]! * JT, rtsTarget: rtsT[i]! * JT,
+  rtdReal: rtdR[i]! * JT, rtsReal: rtsR[i]! * JT,
+  rtdLY: rtdLY[i]! * JT, rtsLY: rtsLY[i]! * JT,
 }));
 
 export const BRANDS = [
