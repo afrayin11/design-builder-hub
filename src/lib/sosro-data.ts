@@ -79,3 +79,27 @@ export const STOCK: StockItem[] = [
   { code: "TSD40", name: "Teh Seduh Sosro", group: "RTS", pack: "40 / 40 Gr", pcsPerCtn: 40, price: 165000, ctn: 150, bdp: 0, avg: 25 },
 ];
 export const TARGET_DOI = 21;
+
+export const JUTA = 1_000_000;
+export const MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+export const YEARS = [2026, 2025];
+
+// Centralized master brand & category mapping
+export type PackCat = "AMDK" | "PET" | "RGB" | "TETRA" | "CAN" | "RTS";
+export const CATEGORY_MAP: Record<PackCat, string[]> = {
+  AMDK: ["PRIM-A"],
+  PET: ["TEBS PET", "FRUIT TEA PET", "S-TEE", "TEH BOTOL PET"],
+  RGB: ["BOTOL KACA"],
+  TETRA: ["TEH BOTOL KOTAK", "FRUIT TEA GENGGAM", "COUNTRY CHOICE 1 LT", "COUNTRY CHOICE 250"],
+  CAN: ["TEBS CAN", "FRUIT TEA CAN"],
+  RTS: ["GUNUNG SLAMAT"],
+};
+export const macroOf = (c: PackCat): "RTD" | "RTS" => (c === "RTS" ? "RTS" : "RTD");
+/** Auto-classify a raw spreadsheet product/brand string into a packaging category. */
+export function classifyBrand(raw: string): PackCat | null {
+  const s = raw.toUpperCase();
+  let best: { c: PackCat; len: number } | null = null;
+  for (const [c, keys] of Object.entries(CATEGORY_MAP) as [PackCat, string[]][])
+    for (const k of keys) if (s.includes(k) && (!best || k.length > best.len)) best = { c, len: k.length };
+  return best?.c ?? null;
+}
