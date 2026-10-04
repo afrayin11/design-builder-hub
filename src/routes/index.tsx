@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { StockMonitor } from "@/components/StockMonitor";
-import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
+import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel, type Rep } from "@/lib/sosro-data";
+import { fetchDms, parseDms, type DmsRow } from "@/lib/dms";
+type PackRow = (typeof PACKAGING)[number];
+type Outlet = { name: string; channel?: string | undefined; value: number };
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -58,49 +61,113 @@ function Dashboard() {
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
   const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
   const [loaded, setLoaded] = useState(false);
+  const [sheets, setSheets] = useState<string[]>(["", "", "", ""]);
+  const [dmsParts, setDmsParts] = useState<(DmsRow[] | null)[]>([null, null]);
+  const [syncMsg, setSyncMsg] = useState<string[]>(["", ""]);
+  const dms = useMemo(() => (dmsParts[0] || dmsParts[1] ? [...(dmsParts[0] ?? []), ...(dmsParts[1] ?? [])] : null), [dmsParts]);
+  const reps = useMemo<Rep[]>(() => {
+    if (!dms) return REPS;
+    const extra = new Map<string, Rep>();
+    for (const r of dms) if (!REPS.some((x) => x.id === r.sales) && !extra.has(r.sales) && r.sales)
+      extra.set(r.sales, { id: r.sales, name: r.sales.replace(/\b\w+/g, (w) => w[0] + w.slice(1).toLowerCase()), channel: r.ch, badge: r.ch, weight: 1 });
+    return [...REPS, ...extra.values()];
+  }, [dms]);
+  const loadSheet = async (i: number, src: string | File) => {
+    setSyncMsg((s) => s.map((x, j) => (j === i ? "Sinkronisasi..." : x)));
+    try {
+      const rows = typeof src === "string" ? await fetchDms(src) : await parseDms(src);
+      setDmsParts((p) => p.map((x, j) => (j === i ? rows : x)));
+      setSyncMsg((s) => s.map((x, j) => (j === i ? `✓ ${rows.length.toLocaleString("id-ID")} baris dimuat` : x)));
+    } catch (e) {
+      setSyncMsg((s) => s.map((x, j) => (j === i ? `✗ ${(e as Error).message}` : x)));
+    }
+  };
 
   useEffect(() => {
     try {
       const d = JSON.parse(localStorage.getItem("sosro-settings") || "{}");
-      if (d.selected) setSelected(d.selected); if (d.targetAdj) setTargetAdj(d.targetAdj);
+      if (Array.isArray(d.selected)) { const ok = d.selected.filter((s: string) => REPS.some((r) => r.id === s)); if (ok.length) setSelected(ok); }
+      if (d.targetAdj) setTargetAdj(d.targetAdj);
       if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
       if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
+      if (Array.isArray(d.sheets)) { setSheets(d.sheets); d.sheets.slice(0, 2).forEach((u: string, i: number) => u && loadSheet(i, u)); }
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode }));
-  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today]);
+    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode, sheets }));
+  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today, sheets]);
+
+  const pickChannel = (c: Channel | "All") => { setChannel(c); setSelected(reps.filter((r) => c === "All" || r.channel === c).map((r) => r.id)); };
 
   const days = new Date(year, month + 1, 0).getDate();
   const cutDay = cutoff === "full" ? days : Math.min(today, days);
   const frac = cutDay / days;
   const cutLabel = `${cutDay} ${MONTHS[month]} ${year}`;
+
+  // Real DMS aggregation pipeline (null = fall back to mock data)
+  const agg = useMemo(() => {
+    if (!dms) return null;
+    const sel = new Set(selected);
+    const f = dms.filter((r) => sel.has(r.sales) && (channel === "All" || r.ch === channel));
+    const M = Array.from({ length: 12 }, () => ({ rtdR: 0, rtsR: 0, rtdLY: 0, rtsLY: 0 }));
+    const cats = Object.keys(CATEGORY_MAP) as PackCat[];
+    const P = Object.fromEntries(cats.map((c) => [c, { cat: c, brand: CATEGORY_MAP[c].join(" / "), mtdVol: 0, mtdVal: 0, ytdVol: 0, ytdVal: 0, lyYtdVal: 0, lyMtdVal: 0 }])) as Record<PackCat, PackRow>;
+    const cust = new Map<string, Outlet>();
+    let ytdTotal = 0;
+    for (const r of f) {
+      const i = r.m - 1;
+      if (i < 0 || i > month || (i === month && r.d > cutDay)) continue;
+      const cur = r.y === year, ly = r.y === year - 1;
+      if (!cur && !ly) continue;
+      const m = M[i]!;
+      if (cur) { if (r.rts) m.rtsR += r.amt; else m.rtdR += r.amt; } else { if (r.rts) m.rtsLY += r.amt; else m.rtdLY += r.amt; }
+      const p = r.cat ? P[r.cat] : null;
+      if (p) {
+        if (cur) { p.ytdVal += r.amt; p.ytdVol += r.ctn; if (i === month) { p.mtdVal += r.amt; p.mtdVol += r.ctn; } }
+        else { p.lyYtdVal += r.amt; if (i === month) p.lyMtdVal += r.amt; }
+      }
+      if (cur) {
+        ytdTotal += r.amt;
+        const o = cust.get(r.cust) ?? { name: r.cust, channel: r.ch, value: 0 };
+        o.value += r.amt; cust.set(r.cust, o);
+      }
+    }
+    const outlets = [...cust.values()].sort((a, b) => b.value - a.value).slice(0, 15);
+    return { M, pack: cats.map((c) => P[c]), outlets, ytdTotal };
+  }, [dms, selected, channel, year, month, cutDay]);
+
   const yd = useMemo(() => monthly.map((m, i) => {
+    const a = agg?.M[i];
     const base = year === 2026
-      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: m.rtdReal, rtsR: m.rtsReal, rtdLY: m.rtdLY, rtsLY: m.rtsLY }
+      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: a ? a.rtdR : m.rtdReal, rtsR: a ? a.rtsR : m.rtsReal, rtdLY: a ? a.rtdLY : m.rtdLY, rtsLY: a ? a.rtsLY : m.rtsLY }
+      : a ? { rtdT: a.rtdLY * 1.05, rtsT: a.rtsLY * 1.05, rtdR: a.rtdR, rtsR: a.rtsR, rtdLY: a.rtdLY, rtsLY: a.rtsLY }
       : { rtdT: m.rtdLY * 1.05, rtsT: m.rtsLY * 1.05, rtdR: m.rtdLY, rtsR: m.rtsLY, rtdLY: m.rtdLY * 0.92, rtsLY: m.rtsLY * 0.92 };
     if (i > month) return { ...base, rtdR: 0, rtsR: 0 };
-    if (i === month && frac < 1) return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
+    if (i === month && frac < 1) {
+      if (a) return { ...base, rtdT: base.rtdT * frac, rtsT: base.rtsT * frac };
+      return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
+    }
     return base;
-  }), [year, month, frac, targets]);
+  }), [year, month, frac, targets, agg]);
 
   const factor = useMemo(() => {
+    if (agg) return 1;
     const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
     return w / TOTAL_WEIGHT;
-  }, [selected, channel]);
+  }, [selected, channel, agg]);
 
   const rows = useMemo(() => monthly.map((m) => {
     const d = yd[monthly.indexOf(m)]!;
     const t = cat === "rtd" ? d.rtdT : cat === "rts" ? d.rtsT : d.rtdT + d.rtsT;
     const r = cat === "rtd" ? d.rtdR : cat === "rts" ? d.rtsR : d.rtdR + d.rtsR;
     const target = t * factor * (targetAdj / 100), real = r * factor;
-    return { month: m.month, target, real: real || null, ach: real ? +(real / target * 100).toFixed(1) : null };
+    return { month: m.month, target, real: real || null, ach: real && target ? +(real / target * 100).toFixed(1) : null };
   }), [factor, cat, targetAdj, yd]);
 
   const cm = yd[month]!;
   const real = (cm.rtdR + cm.rtsR) * factor;
-  const target = (cm.rtdT + cm.rtsT) * factor * (targetAdj / 100);
+  const target = (cm.rtdT + cm.rtsT) * factor * (targetAdj / 100) || 1;
   const ly = (cm.rtdLY + cm.rtsLY) * factor;
   const gap = real - target, growth = ly ? real / ly - 1 : 0;
   const rtdShare = real ? cm.rtdR * factor / real : 0;
@@ -133,12 +200,12 @@ function Dashboard() {
             </div>
             <div className="flex rounded-full border border-border bg-card p-1">
               {(["All", ...CHANNELS] as const).map((c) => (
-                <button key={c} onClick={() => setChannel(c)}
+                <button key={c} onClick={() => pickChannel(c)}
                   className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors", channel === c ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{c}</button>
               ))}
             </div>
-            <RepPicker selected={selected} setSelected={setSelected} />
-            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} />
+            <RepPicker reps={reps} selected={selected} setSelected={setSelected} />
+            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} sheets={sheets} setSheets={setSheets} onSync={loadSheet} syncMsg={syncMsg} />
           </div>
           <div className="flex flex-wrap items-center gap-2 px-5 pb-3 lg:px-8">
             <CalendarDays className="h-4 w-4 text-primary" />
@@ -150,6 +217,7 @@ function Dashboard() {
               ))}
             </div>
             <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">Cut-off per: {cutLabel}</span>
+            <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", dms ? "bg-success/15 text-success" : "bg-surface text-muted-foreground")}>{dms ? `Data DMS · ${dms.length.toLocaleString("id-ID")} baris` : "Data contoh (sheet belum terhubung)"}</span>
           </div>
           <div className="flex flex-wrap gap-1 px-5 pb-3 lg:px-8">
             <button onClick={() => setView(view === "exec" ? "stock" : "exec")} className="rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground md:hidden">{view === "exec" ? "→ Stok & DOI" : "→ Dashboard"}</button>
@@ -235,13 +303,13 @@ function Dashboard() {
             </>
           )}
 
-          {view === "exec" && tab === 1 && <BrandSlide period={period} setPeriod={setPeriod} factor={factor} mScale={mScale} yScale={yScale} perLabel={perLabel} />}
+          {view === "exec" && tab === 1 && <BrandSlide period={period} setPeriod={setPeriod} factor={agg ? 1 : factor} mScale={agg ? 1 : mScale} yScale={agg ? 1 : yScale} perLabel={perLabel} pack={agg?.pack} />}
 
           {view === "exec" && tab === 2 && (
             <>
               <SectionTitle n="03" title="Top 15 Pareto Outlet" sub={`Top 15 Pareto s/d ${perLabel}`} />
               <div className="glass-card overflow-x-auto p-5 hover:translate-y-0">
-                <ParetoTable factor={factor * yScale} />
+                <ParetoTable factor={factor * yScale} outlets={agg?.outlets} total={agg?.ytdTotal} />
               </div>
             </>
           )}
@@ -269,10 +337,16 @@ function CardHead({ icon: I, label }: { icon: typeof Target; label: string }) {
   );
 }
 
-function RepPicker({ selected, setSelected }: { selected: string[]; setSelected: (s: string[]) => void }) {
+const BADGE: Record<string, string> = { LOKMAN: "bg-info/15 text-info", MOT: "bg-chart-5/15 text-chart-5", NKA: "bg-warning/15 text-warning", GT: "bg-success/15 text-success", MT: "bg-info/15 text-info", Horeca: "bg-chart-3/15 text-chart-3" };
+function RepPicker({ reps, selected, setSelected }: { reps: Rep[]; selected: string[]; setSelected: (s: string[]) => void }) {
   const [q, setQ] = useState("");
-  const all = selected.length === REPS.length;
+  const all = selected.length === reps.length;
   const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  const quick: [string, () => void][] = [
+    ["Pilih Semua GT", () => setSelected(reps.filter((r) => r.channel === "GT").map((r) => r.id))],
+    ["Pilih Semua Modern (NKA / MOT / LOKMAN)", () => setSelected(reps.filter((r) => r.channel === "NKA" || r.channel === "MT").map((r) => r.id))],
+    ["Reset Pilihan", () => setSelected(reps.map((r) => r.id))],
+  ];
   return (
     <Popover>
       <PopoverTrigger className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:border-primary/50">
@@ -284,20 +358,24 @@ function RepPicker({ selected, setSelected }: { selected: string[]; setSelected:
         <div className="border-b border-border p-3">
           <div className="relative"><Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari salesman..." className="pl-8" /></div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {quick.map(([l, fn]) => <button key={l} onClick={fn} className="rounded-full border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold hover:border-primary/50 hover:text-primary">{l}</button>)}
+          </div>
           <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-semibold">
-            <Checkbox checked={all} onCheckedChange={() => setSelected(all ? [] : REPS.map((r) => r.id))} />Pilih Semua
+            <Checkbox checked={all} onCheckedChange={() => setSelected(all ? [] : reps.map((r) => r.id))} />Pilih Semua
           </label>
         </div>
         <div className="max-h-72 overflow-y-auto p-2">
           {CHANNELS.map((c) => {
-            const list = REPS.filter((r) => r.channel === c && r.name.toLowerCase().includes(q.toLowerCase()));
+            const list = reps.filter((r) => r.channel === c && r.name.toLowerCase().includes(q.toLowerCase()));
             if (!list.length) return null;
             return (
               <div key={c} className="mb-2">
                 <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-primary">{c}</p>
                 {list.map((r) => (
                   <label key={r.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-accent">
-                    <Checkbox checked={selected.includes(r.id)} onCheckedChange={() => toggle(r.id)} />{r.name}
+                    <Checkbox checked={selected.includes(r.id)} onCheckedChange={() => toggle(r.id)} /><span className="flex-1">{r.name}</span>
+                    <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-bold", BADGE[r.badge] ?? "bg-surface text-muted-foreground")}>{r.badge}</span>
                   </label>
                 ))}
               </div>
@@ -310,7 +388,7 @@ function RepPicker({ selected, setSelected }: { selected: string[]; setSelected:
 }
 
 type Tg = { rtd: number; rts: number }[];
-function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, mode, setMode }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void }) {
+function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, mode, setMode, sheets, setSheets, onSync, syncMsg }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void; sheets: string[]; setSheets: (s: string[]) => void; onSync: (i: number, src: string | File) => void; syncMsg: string[] }) {
   const slots = ["URL Google Sheets: Data Tahunan (2025 Baseline)", "URL Google Sheets: Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD / RTS)", "URL Google Sheets: Monitoring Stok & DOI Depo"];
   const edit = (i: number, k: "rtd" | "rts", v: string) => setTargets(targets.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, cleanNum(v)) } : t)));
   return (
@@ -331,7 +409,18 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
                   ))}
                 </div>
               )}
-              {(i !== 2 || mode === "link") && <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div>}
+              {(i !== 2 || mode === "link") && (
+                <div className="flex gap-2">
+                  <div className="relative flex-1"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" value={sheets[i] ?? ""} onChange={(e) => setSheets(sheets.map((x, j) => (j === i ? e.target.value : x)))} placeholder="https://docs.google.com/spreadsheets/..." /></div>
+                  {i < 2 && <button disabled={!sheets[i]} onClick={() => onSync(i, sheets[i]!)} className="rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground disabled:opacity-40">Sync</button>}
+                </div>
+              )}
+              {i < 2 && (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <label className="cursor-pointer rounded-lg border border-border bg-card px-2.5 py-1 font-semibold hover:border-primary/50">Unggah CSV<input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => e.target.files?.[0] && onSync(i, e.target.files[0])} /></label>
+                  <span className={cn(syncMsg[i]?.startsWith("✗") ? "text-danger" : syncMsg[i]?.startsWith("✓") ? "text-success" : "text-muted-foreground")}>{syncMsg[i] || "Kolom DMS: TANGGAL, BULAN, CHANNEL, NAMASALESMAN, NAMACUSTOMER, BRAND, NAMAPRODUK, NETAMOUNT, QTYSOLDCRT"}</span>
+                </div>
+              )}
               {i === 2 && mode === "manual" && (
                 <div className="space-y-2">
                   <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(9rem,1fr)] gap-1.5 text-xs">
@@ -356,18 +445,20 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
   );
 }
 
-function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel }: { period: Period; setPeriod: (p: Period) => void; factor: number; mScale: number; yScale: number; perLabel: string }) {
+function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel, pack }: { period: Period; setPeriod: (p: Period) => void; factor: number; mScale: number; yScale: number; perLabel: string; pack?: PackRow[] | undefined }) {
+  const SRC = pack ?? PACKAGING;
   const [open, setOpen] = useState<string | null>(null);
-  const rows = PACKAGING.map((p) => {
+  const rows = SRC.map((p) => {
     const sc = period === "mtd" ? mScale : yScale;
     const vol = (period === "mtd" ? p.mtdVol : p.ytdVol) * factor * sc;
     const val = (period === "mtd" ? p.mtdVal : p.ytdVal) * factor * sc;
-    const gwt = period === "mtd" ? p.mtdVal / p.lyMtdVal - 1 : p.ytdVal / p.lyYtdVal - 1;
+    const lyv = period === "mtd" ? p.lyMtdVal : p.lyYtdVal;
+    const gwt = lyv ? (period === "mtd" ? p.mtdVal : p.ytdVal) / lyv - 1 : 0;
     return { ...p, vol, val, gwt };
   });
   const total = rows.reduce((a, r) => a + r.val, 0) || 1;
   const totalVol = rows.reduce((a, r) => a + r.vol, 0);
-  const lyTotal = PACKAGING.reduce((a, p) => a + (period === "mtd" ? p.lyMtdVal * mScale : p.lyYtdVal * yScale), 0) * factor || 1;
+  const lyTotal = SRC.reduce((a, p) => a + (period === "mtd" ? p.lyMtdVal * mScale : p.lyYtdVal * yScale), 0) * factor || 1;
   const pie = rows.map((r) => ({ name: r.cat, value: period === "yoy" ? Math.max(0, +(r.gwt * 100).toFixed(1)) || 0.1 : +(r.val / total * 100).toFixed(1) }));
   return (
     <>
@@ -498,8 +589,10 @@ function DetailTable({ yd, month, factor, adj }: { yd: YD[]; month: number; fact
   );
 }
 
-function ParetoTable({ factor }: { factor: number }) {
-  const total = OUTLETS.reduce((a, o) => a + o.value, 0) / 0.62;
+function ParetoTable({ factor, outlets, total: realTotal }: { factor: number; outlets?: Outlet[] | undefined; total?: number | undefined }) {
+  const list: Outlet[] = outlets ?? OUTLETS;
+  const f = outlets ? 1 : factor;
+  const total = (outlets ? realTotal || 1 : OUTLETS.reduce((a, o) => a + o.value, 0) / 0.62);
   let cum = 0;
   return (
     <table className="w-full text-sm">
@@ -507,14 +600,14 @@ function ParetoTable({ factor }: { factor: number }) {
         <tr className="border-b border-border"><th className="py-2 text-left">#</th><th className="text-left">Outlet</th><th className="text-left">Channel</th><th className="text-right">Realisasi</th><th className="text-right">Share</th><th className="w-48 pl-6 text-left">Kumulatif</th></tr>
       </thead>
       <tbody>
-        {OUTLETS.map((o, i) => {
+        {list.map((o, i) => {
           const s = o.value / total; cum += s;
           return (
             <tr key={o.name} className="border-b border-border/60 hover:bg-surface/50">
               <td className="py-2.5 font-display font-semibold text-muted-foreground">{String(i + 1).padStart(2, "0")}</td>
-              <td className="whitespace-nowrap font-medium">{o.name}</td>
+              <td className="whitespace-nowrap font-medium">{o.name}{cum <= 0.8 && <span className="ml-2 rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary">A</span>}</td>
               <td><span className="rounded-full bg-surface px-2 py-0.5 text-xs">{o.channel}</span></td>
-              <td className="whitespace-nowrap text-right tabular-nums">{fmt(o.value * factor)}</td>
+              <td className="whitespace-nowrap text-right tabular-nums">{fmt(o.value * f)}</td>
               <td className="text-right tabular-nums">{pct(s)}</td>
               <td className="pl-6"><div className="flex items-center gap-2"><div className="h-1.5 flex-1 rounded-full bg-surface"><div className="h-full rounded-full bg-primary" style={{ width: `${cum * 100}%` }} /></div><span className="w-12 text-right text-xs tabular-nums">{pct(cum)}</span></div></td>
             </tr>
