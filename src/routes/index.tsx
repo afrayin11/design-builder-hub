@@ -489,7 +489,7 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
                       <option value="ALL">Total Depo (Konsolidasi Seluruh Salesman)</option>
                       {reps.map((r) => <option key={r.id} value={r.id}>{SALES_CODE[r.id] ? `${SALES_CODE[r.id]} - ${SALES_LABEL[r.id]}` : r.name} ({r.badge})</option>)}
                     </select>
-                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", scope === "ALL" ? "bg-primary/15 text-primary" : "bg-accent/15 text-accent")}>
+                    <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", scope === "ALL" ? "bg-primary/15 text-primary" : "bg-warning/15 text-warning")}>
                       Editing: {scope === "ALL" ? "TOTAL DEPO" : `${scopeRep?.name ?? scope} · ${scopeRep?.badge ?? ""}`}
                     </span>
                     {scope !== "ALL" && !hasOwn && <span className="text-[11px] text-warning">Belum diisi — memakai proporsi baseline</span>}
