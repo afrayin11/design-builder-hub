@@ -168,8 +168,8 @@ function Dashboard() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="glass-card relative overflow-hidden p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
-                  <p className="mt-4 whitespace-nowrap font-display text-3xl font-semibold">{fmt(real)}</p>
-                  <p className="whitespace-nowrap text-sm text-muted-foreground">dari {fmt(target)}</p>
+                  <p className="mt-4 whitespace-nowrap font-display text-3xl font-semibold" title={rpFull(real)}>{fmt(real)}</p>
+                  <p className="whitespace-nowrap text-sm text-muted-foreground" title={rpFull(target)}>dari {fmt(target)}</p>
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
                     <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (real / target) * 100)}%` }} />
                   </div>
@@ -177,7 +177,7 @@ function Dashboard() {
                 </div>
                 <div className="glass-card p-5">
                   <CardHead icon={Wallet} label="Net Gap Value" />
-                  <p className={cn("mt-4 whitespace-nowrap font-display text-3xl font-semibold", gap < 0 ? "text-danger" : "text-success")}>{fmt(gap)}</p>
+                  <p className={cn("mt-4 whitespace-nowrap font-display text-3xl font-semibold", gap < 0 ? "text-danger" : "text-success")} title={rpFull(gap)}>{fmt(gap)}</p>
                   <span className={cn("mt-3 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold", gap < 0 ? "bg-danger/15 text-danger" : "bg-success/15 text-success")}>
                     {gap < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}{gap < 0 ? "Defisit" : "Surplus"}
                   </span>
