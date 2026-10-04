@@ -1,17 +1,17 @@
 export type Channel = "NKA" | "MT" | "GT" | "Horeca";
 export const CHANNELS: Channel[] = ["NKA", "MT", "GT", "Horeca"];
 
-export interface Rep { id: string; name: string; channel: Channel; weight: number }
+export interface Rep { id: string; name: string; channel: Channel; badge: string; weight: number }
 
-const names: Record<Channel, string[]> = {
-  NKA: ["Andi Pratama", "Budi Santoso", "Citra Lestari"],
-  MT: ["Dewi Anggraini", "Eko Saputra", "Fajar Nugroho", "Gita Permata"],
-  GT: ["Hendra Wijaya", "Indah Sari", "Joko Susilo", "Kartika Putri", "Lukman Hakim"],
-  Horeca: ["Maya Rahma", "Nanda Kusuma", "Oki Firmansyah"],
-};
-export const REPS: Rep[] = CHANNELS.flatMap((c) =>
-  names[c].map((n, i) => ({ id: `${c}-${i}`, name: n, channel: c, weight: 0.6 + ((n.length * 7 + i * 13) % 10) / 10 })),
-);
+// Salesman master hierarchy (id = normalized DMS NAMASALESMAN key)
+export const REPS: Rep[] = [
+  { id: "NANANG", name: "Nanang", channel: "MT", badge: "LOKMAN", weight: 1.1 },
+  { id: "NOVITA", name: "Novita", channel: "MT", badge: "MOT", weight: 0.9 },
+  { id: "NKA SOS", name: "NKA SOS", channel: "NKA", badge: "NKA", weight: 1.6 },
+  { id: "BACHTIAR", name: "Bachtiar", channel: "GT", badge: "GT", weight: 1.2 },
+  { id: "EDY", name: "Edy", channel: "GT", badge: "GT", weight: 1.0 },
+  { id: "FITRI", name: "Fitri Yani", channel: "GT", badge: "GT", weight: 0.8 },
+];
 export const TOTAL_WEIGHT = REPS.reduce((a, r) => a + r.weight, 0);
 
 export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
