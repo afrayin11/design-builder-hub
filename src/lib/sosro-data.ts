@@ -62,21 +62,21 @@ export const STOCK_GROUPS = ["FRUIT TEA CAN", "TEBS CAN", "FRUIT TEA PET K12", "
 export type StockGroup = (typeof STOCK_GROUPS)[number];
 export interface StockItem { code: string; name: string; group: StockGroup; pack: string; pcsPerCtn: number; price: number; ctn: number; bdp: number; avg: number }
 export const STOCK: StockItem[] = [
-  { code: "FTC20", name: "Fruit Tea Apel Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 420, bdp: 120, avg: 95 },
-  { code: "FTC21", name: "Fruit Tea Blackcurrant Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 1650, bdp: 0, avg: 60 },
-  { code: "FTC22", name: "Fruit Tea Strawberry Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 780, bdp: 200, avg: 52 },
-  { code: "TSC20", name: "Tebs Sparkling Tea Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 310, bdp: 0, avg: 48 },
-  { code: "TSC21", name: "Tebs Lemon Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 540, bdp: 150, avg: 31 },
-  { code: "FTE30", name: "Fruit Tea Apel PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 2100, bdp: 400, avg: 180 },
-  { code: "FTE31", name: "Fruit Tea Blackcurrant PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 960, bdp: 0, avg: 160 },
-  { code: "FTE33", name: "Fruit Tea Freeze PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 2850, bdp: 300, avg: 140 },
-  { code: "FTE01", name: "Fruit Tea Xtreme PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 640, bdp: 100, avg: 72 },
-  { code: "TBS01", name: "Teh Botol Sosro RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 72000, ctn: 5200, bdp: 800, avg: 410 },
-  { code: "TBS02", name: "Teh Botol Sosro Less Sugar RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 74000, ctn: 900, bdp: 0, avg: 150 },
-  { code: "PRA60", name: "Prim-A Air Mineral", group: "AMDK", pack: "24 / 600 Ml", pcsPerCtn: 24, price: 42000, ctn: 3400, bdp: 600, avg: 260 },
-  { code: "PRA15", name: "Prim-A Air Mineral 1.5L", group: "AMDK", pack: "12 / 1500 Ml", pcsPerCtn: 12, price: 46000, ctn: 1200, bdp: 0, avg: 35 },
-  { code: "TCS25", name: "Teh Celup Sosro", group: "RTS", pack: "48 / 25 Sachet", pcsPerCtn: 48, price: 210000, ctn: 380, bdp: 50, avg: 22 },
-  { code: "TSD40", name: "Teh Seduh Sosro", group: "RTS", pack: "40 / 40 Gr", pcsPerCtn: 40, price: 165000, ctn: 150, bdp: 0, avg: 25 },
+  { code: "FTC20", name: "Fruit Tea Apel Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 420, bdp: 120, avg: 38 },
+  { code: "FTC21", name: "Fruit Tea Blackcurrant Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 1650, bdp: 0, avg: 24 },
+  { code: "FTC22", name: "Fruit Tea Strawberry Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 780, bdp: 200, avg: 21 },
+  { code: "TSC20", name: "Tebs Sparkling Tea Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 310, bdp: 0, avg: 19 },
+  { code: "TSC21", name: "Tebs Lemon Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 540, bdp: 150, avg: 12 },
+  { code: "FTE30", name: "Fruit Tea Apel PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 2100, bdp: 400, avg: 72 },
+  { code: "FTE31", name: "Fruit Tea Blackcurrant PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 960, bdp: 0, avg: 64 },
+  { code: "FTE33", name: "Fruit Tea Freeze PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 2850, bdp: 300, avg: 56 },
+  { code: "FTE01", name: "Fruit Tea Xtreme PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 640, bdp: 100, avg: 29 },
+  { code: "TBS01", name: "Teh Botol Sosro RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 72000, ctn: 5200, bdp: 800, avg: 164 },
+  { code: "TBS02", name: "Teh Botol Sosro Less Sugar RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 74000, ctn: 900, bdp: 0, avg: 60 },
+  { code: "PRA60", name: "Prim-A Air Mineral", group: "AMDK", pack: "24 / 600 Ml", pcsPerCtn: 24, price: 42000, ctn: 3400, bdp: 600, avg: 104 },
+  { code: "PRA15", name: "Prim-A Air Mineral 1.5L", group: "AMDK", pack: "12 / 1500 Ml", pcsPerCtn: 12, price: 46000, ctn: 1200, bdp: 0, avg: 14 },
+  { code: "TCS25", name: "Teh Celup Sosro", group: "RTS", pack: "48 / 25 Sachet", pcsPerCtn: 48, price: 210000, ctn: 380, bdp: 50, avg: 9 },
+  { code: "TSD40", name: "Teh Seduh Sosro", group: "RTS", pack: "40 / 40 Gr", pcsPerCtn: 40, price: 165000, ctn: 150, bdp: 0, avg: 10 },
 ];
 export const TARGET_DOI = 45;
 
