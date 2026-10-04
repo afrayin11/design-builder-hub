@@ -17,7 +17,8 @@ export const SALES_MASTER: { key: string; name: string; channel: Channel; badge:
 ];
 export function masterOf(raw: string) {
   const s = raw.toUpperCase().trim();
-  return SALES_MASTER.find((m) => s === m.key || s.startsWith(m.key + " ") || s.includes(m.key));
+  const t = s.replace(/^BAHTIAR/, "BACHTIAR");
+  return SALES_MASTER.find((m) => t === m.key || t.startsWith(m.key + " ") || t.includes(m.key));
 }
 export function classifyChannel(raw: string): Channel {
   const s = raw.toUpperCase();
