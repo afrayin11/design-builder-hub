@@ -16,7 +16,6 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { cn } from "@/lib/utils";
 import { StockMonitor } from "@/components/StockMonitor";
 import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -142,14 +141,8 @@ function Dashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2 px-5 pb-3 lg:px-8">
             <CalendarDays className="h-4 w-4 text-primary" />
-            <Select value={String(year)} onValueChange={(v) => setYear(+v)}>
-              <SelectTrigger className="h-8 w-24 rounded-full bg-card text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>{YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={String(month)} onValueChange={(v) => setMonth(+v)}>
-              <SelectTrigger className="h-8 w-32 rounded-full bg-card text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>{MONTHS_ID.map((m, i) => <SelectItem key={m} value={String(i)}>{m}</SelectItem>)}</SelectContent>
-            </Select>
+            <select aria-label="Filter Tahun" value={year} onChange={(e) => setYear(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{YEARS.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+            <select aria-label="Filter Bulan" value={month} onChange={(e) => setMonth(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{MONTHS_ID.map((m, i) => <option key={m} value={i}>{m}</option>)}</select>
             <div className="flex rounded-full border border-border bg-card p-1">
               {([["full", "Akhir Bulan / Full Month"], ["daily", "Harian Berjalan / Cut-off Hari Ini"]] as const).map(([k, l]) => (
                 <button key={k} onClick={() => setCutoff(k)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", cutoff === k ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>{l}</button>
