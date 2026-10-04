@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   Activity, BarChart3, ChevronDown, Gauge, LayoutDashboard, PieChart as PieIcon, Search, Settings,
-  Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, Scale, Link2,
+  Table2, Target, TrendingDown, TrendingUp, Trophy, Users, Wallet, Scale, Link2, Warehouse,
 } from "lucide-react";
 import {
   Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { BRANDS, CHANNELS, CLOSED_MONTHS, MONTHS, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
+import { StockMonitor } from "@/components/StockMonitor";
+import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -45,6 +46,9 @@ function Dashboard() {
   const [cat, setCat] = useState<Cat>("all");
   const [targetAdj, setTargetAdj] = useState(100);
   const [tab, setTab] = useState(0);
+  const [view, setView] = useState<"exec" | "stock">("exec");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [period, setPeriod] = useState<Period>("ytd");
 
   const factor = useMemo(() => {
     const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
@@ -70,12 +74,13 @@ function Dashboard() {
     <div className="flex min-h-screen bg-background text-foreground">
       <aside className="sticky top-0 hidden h-screen w-20 flex-col items-center gap-3 border-r border-sidebar-border bg-sidebar py-6 md:flex">
         <div className="mb-6 grid h-11 w-11 place-items-center rounded-2xl bg-primary text-primary-foreground glow-primary"><Activity className="h-5 w-5" /></div>
-        {[LayoutDashboard, PieIcon, Trophy].map((I, i) => (
-          <button key={i} onClick={() => setTab(i)} aria-label={["Performance", "Brand", "Pareto"][i]}
-            className={cn("grid h-11 w-11 place-items-center rounded-2xl transition-colors", tab === i ? "bg-sidebar-accent text-primary" : "text-muted-foreground hover:text-foreground")}>
+        {([["exec", LayoutDashboard, "Executive Dashboard"], ["stock", Warehouse, "Monitoring Stok & DOI Depo"]] as const).map(([v, I, l]) => (
+          <button key={v} onClick={() => setView(v)} aria-label={l} title={l}
+            className={cn("grid h-11 w-11 place-items-center rounded-2xl transition-colors", view === v ? "bg-sidebar-accent text-primary" : "text-muted-foreground hover:text-foreground")}>
             <I className="h-5 w-5" />
           </button>
         ))}
+        <button onClick={() => setSettingsOpen(true)} aria-label="Data & Target Settings" title="Data & Target Settings" className="grid h-11 w-11 place-items-center rounded-2xl text-muted-foreground hover:text-foreground"><Settings className="h-5 w-5" /></button>
       </aside>
 
       <div className="flex-1 min-w-0">
@@ -92,17 +97,19 @@ function Dashboard() {
               ))}
             </div>
             <RepPicker selected={selected} setSelected={setSelected} />
-            <SettingsModal targetAdj={targetAdj} setTargetAdj={setTargetAdj} />
+            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} />
           </div>
-          <div className="flex gap-1 px-5 pb-3 lg:px-8 md:hidden">
-            {["Performance", "Brand", "Pareto"].map((t, i) => (
+          <div className="flex flex-wrap gap-1 px-5 pb-3 lg:px-8">
+            <button onClick={() => setView(view === "exec" ? "stock" : "exec")} className="rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground md:hidden">{view === "exec" ? "→ Stok & DOI" : "→ Dashboard"}</button>
+            {view === "exec" && ["Performance", "Brand & Packaging", "Pareto"].map((t, i) => (
               <button key={t} onClick={() => setTab(i)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", tab === i ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground")}>{t}</button>
             ))}
           </div>
         </header>
 
         <main className="space-y-6 p-5 lg:p-8">
-          {tab === 0 && (
+          {view === "stock" && <StockMonitor />}
+          {view === "exec" && tab === 0 && (
             <>
               <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`YTD Jan – ${MONTHS[CLOSED_MONTHS - 1]} 2026`} />
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -176,39 +183,9 @@ function Dashboard() {
             </>
           )}
 
-          {tab === 1 && (
-            <>
-              <SectionTitle n="02" title="Brand Contribution" sub="Share realisasi per brand · YTD" />
-              <div className="grid gap-4 lg:grid-cols-5">
-                <div className="glass-card p-5 lg:col-span-3 hover:translate-y-0">
-                  <CardHead icon={PieIcon} label="Kontribusi Brand" />
-                  <div className="h-80">
-                    <ResponsiveContainer>
-                      <PieChart>
-                        <Pie data={BRANDS} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="85%" paddingAngle={3} stroke="none">
-                          {BRANDS.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
-                        </Pie>
-                        <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12 }} formatter={(v: number) => `${v}%`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="glass-card space-y-3 p-5 lg:col-span-2 hover:translate-y-0">
-                  <CardHead icon={Gauge} label="Rincian" />
-                  {BRANDS.map((b, i) => (
-                    <div key={b.name} className="flex items-center gap-3 rounded-xl bg-surface p-3">
-                      <span className="h-3 w-3 rounded-full" style={{ background: CHART_COLORS[i] }} />
-                      <span className="flex-1 text-sm font-medium">{b.name}</span>
-                      <span className="whitespace-nowrap text-xs text-muted-foreground">{fmt(real * b.value / 100)}</span>
-                      <span className="w-12 text-right font-display font-semibold">{b.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+          {view === "exec" && tab === 1 && <BrandSlide period={period} setPeriod={setPeriod} factor={factor} />}
 
-          {tab === 2 && (
+          {view === "exec" && tab === 2 && (
             <>
               <SectionTitle n="03" title="Top 15 Pareto Outlet" sub="Kontribusi kumulatif terhadap total realisasi" />
               <div className="glass-card overflow-x-auto p-5 hover:translate-y-0">
@@ -280,22 +257,92 @@ function RepPicker({ selected, setSelected }: { selected: string[]; setSelected:
   );
 }
 
-function SettingsModal({ targetAdj, setTargetAdj }: { targetAdj: number; setTargetAdj: (n: number) => void }) {
+function SettingsModal({ open, setOpen, targetAdj, setTargetAdj }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void }) {
+  const slots = ["Data Tahunan / 2025 Baseline", "Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD vs RTS)", "Data Monitoring Stok & DOI Depo"];
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground glow-primary">
         <Settings className="h-4 w-4" />Data & Target
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Data & Target Settings</DialogTitle><DialogDescription>Sinkronisasi Google Sheets dan input target manual.</DialogDescription></DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2"><Label>Google Sheets URL</Label>
-            <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div></div>
-          <div className="space-y-2"><Label>Penyesuaian Target (%)</Label>
-            <Input type="number" value={targetAdj} onChange={(e) => setTargetAdj(Math.max(1, Number(e.target.value) || 100))} /></div>
+        <div className="space-y-3">
+          {slots.map((l, i) => (
+            <div key={l} className="space-y-2 rounded-xl border border-border bg-surface/50 p-3">
+              <Label className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{i + 1}</span>{l}</Label>
+              <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div>
+              {i === 2 && (<div className="space-y-1"><Label className="text-xs text-muted-foreground">Input manual · Penyesuaian Target (%)</Label>
+                <Input type="number" value={targetAdj} onChange={(e) => setTargetAdj(Math.max(1, Number(e.target.value) || 100))} /></div>)}
+            </div>
+          ))}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function BrandSlide({ period, setPeriod, factor }: { period: Period; setPeriod: (p: Period) => void; factor: number }) {
+  const rows = PACKAGING.map((p) => {
+    const vol = (period === "mtd" ? p.mtdVol : p.ytdVol) * factor;
+    const val = (period === "mtd" ? p.mtdVal : p.ytdVal) * factor;
+    const gwt = period === "mtd" ? p.mtdVal / p.lyMtdVal - 1 : p.ytdVal / p.lyYtdVal - 1;
+    return { ...p, vol, val, gwt };
+  });
+  const total = rows.reduce((a, r) => a + r.val, 0);
+  const totalVol = rows.reduce((a, r) => a + r.vol, 0);
+  const lyTotal = PACKAGING.reduce((a, p) => a + (period === "mtd" ? p.lyMtdVal : p.lyYtdVal), 0) * factor;
+  const pie = rows.map((r) => ({ name: r.cat, value: period === "yoy" ? Math.max(0, +(r.gwt * 100).toFixed(1)) || 0.1 : +(r.val / total * 100).toFixed(1) }));
+  return (
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <SectionTitle n="02" title="Brand & Packaging Distribution Analysis" sub={period === "mtd" ? `Bulan Berjalan · ${MONTHS[CLOSED_MONTHS - 1]} 2026` : period === "ytd" ? `YTD Jan – ${MONTHS[CLOSED_MONTHS - 1]} 2026` : "Pertumbuhan YTD 2026 vs 2025"} />
+        <div className="flex rounded-full border border-border bg-card p-1">
+          {([["mtd", "Bulan Berjalan / MTD"], ["ytd", "YTD"], ["yoy", "YoY Growth (% GWT)"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setPeriod(k)} className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold", period === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="glass-card p-5 lg:col-span-2 hover:translate-y-0">
+          <CardHead icon={PieIcon} label={period === "yoy" ? "Kontribusi Growth Positif" : "Share Nilai per Kemasan"} />
+          <div className="relative h-72">
+            <ResponsiveContainer>
+              <PieChart>
+                <Pie data={pie} dataKey="value" nameKey="name" innerRadius="60%" outerRadius="88%" paddingAngle={3} stroke="none">
+                  {pie.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
+                </Pie>
+                <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12 }} formatter={(v: number) => `${v}%`} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+              <div><p className="text-xs text-muted-foreground">{period === "yoy" ? "GWT Total" : "Total Omset"}</p>
+                <p className="font-display text-lg font-semibold">{period === "yoy" ? `${total / lyTotal - 1 >= 0 ? "+" : ""}${pct(total / lyTotal - 1)}` : fmt(total)}</p></div>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3 text-xs">{pie.map((p, i) => <span key={p.name} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[i] }} />{p.name}</span>)}</div>
+        </div>
+        <div className="glass-card overflow-x-auto p-5 lg:col-span-3 hover:translate-y-0">
+          <CardHead icon={Gauge} label="Brand & Packaging Breakdown" />
+          <table className="mt-4 w-full text-sm">
+            <thead className="text-xs text-muted-foreground"><tr className="border-b border-border">
+              <th className="py-2 text-left">Kategori / Kemasan</th><th className="text-right">Volume (Krat/CTN)</th><th className="text-right">Omset (IDR)</th><th className="text-right">Kontribusi</th><th className="text-right">% GWT</th></tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.cat} className="border-b border-border/60">
+                  <td className="py-3"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[i] }} /><div><p className="font-semibold">{r.cat}</p><p className="text-xs text-muted-foreground">{r.brand}</p></div></div></td>
+                  <td className="whitespace-nowrap text-right tabular-nums">{Math.round(r.vol).toLocaleString("id-ID")}</td>
+                  <td className="whitespace-nowrap text-right tabular-nums">{fmt(r.val)}</td>
+                  <td className="text-right tabular-nums">{pct(r.val / total)}</td>
+                  <td className="text-right"><span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", r.gwt >= 0 ? "bg-success/15 text-success" : "bg-danger/15 text-danger")}>{r.gwt >= 0 ? "+" : ""}{pct(r.gwt)}</span></td>
+                </tr>
+              ))}
+              <tr className="font-bold"><td className="py-3">TOTAL</td><td className="text-right tabular-nums">{Math.round(totalVol).toLocaleString("id-ID")}</td><td className="whitespace-nowrap text-right tabular-nums">{fmt(total)}</td><td className="text-right">100%</td>
+                <td className="text-right"><span className={cn("rounded-full px-2 py-0.5 text-xs", total >= lyTotal ? "bg-success/15 text-success" : "bg-danger/15 text-danger")}>{total >= lyTotal ? "+" : ""}{pct(total / lyTotal - 1)}</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
