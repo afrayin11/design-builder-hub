@@ -3,7 +3,7 @@ import { classifyBrand, type Channel, type PackCat } from "@/lib/sosro-data";
 
 export interface DmsRow {
   y: number; m: number; d: number; ch: Channel; sales: string; cust: string; sku: string;
-  brand: string; cat: PackCat | null; rts: boolean; amt: number; ctn: number;
+  brand: string; cat: PackCat | null; rts: boolean; amt: number; ctn: number; code: string; sale: boolean;
 }
 
 /** Salesman master: name -> filter channel + display badge */
@@ -62,6 +62,7 @@ function mapRow(r: Record<string, string>): DmsRow | null {
     ch: master?.channel ?? classifyChannel(g("CHANNEL")),
     sales: salesId(sales), cust: g("NAMACUSTOMER") || g("KODECUSTOMER"), sku: g("NAMAPRODUK") || g("KODEPRODUK"),
     brand, cat: rts ? "RTS" : classifyBrand(cls), rts, amt, ctn: num(g("QTYSOLDCRT")) || num(g("QTYSOLD")),
+    code: g("KODEPRODUK").trim(), sale: amt > 0 && (!g("TIPETRANS") || g("TIPETRANS").toLowerCase().includes("sales")),
   };
 }
 
