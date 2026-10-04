@@ -36,6 +36,8 @@ const fmt = (v: number) => {
   if (a >= 1e6) return `${s}Rp ${Math.round(a / 1e6)} Jt`;
   return `${s}Rp ${a.toLocaleString("id-ID")}`;
 };
+const rpFull = (v: number) => `Rp ${Math.round(v).toLocaleString("id-ID")}`;
+const cleanNum = (s: string) => Number(s.replace(/[^0-9-]/g, "")) || 0;
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 type Cat = "all" | "rtd" | "rts";
 const CHART_COLORS = ["var(--chart-1)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-2)", "var(--muted-foreground)"];
@@ -54,7 +56,7 @@ function Dashboard() {
   const [cutoff, setCutoff] = useState<"full" | "daily">("full");
   const [today, setToday] = useState(1);
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
-  const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget / JUTA, rts: m.rtsTarget / JUTA })));
+  const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ function Dashboard() {
       const d = JSON.parse(localStorage.getItem("sosro-settings") || "{}");
       if (d.selected) setSelected(d.selected); if (d.targetAdj) setTargetAdj(d.targetAdj);
       if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff);
-      if (d.targets?.length === 12) setTargets(d.targets); if (d.targetMode) setTargetMode(d.targetMode);
+      if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
@@ -77,7 +79,7 @@ function Dashboard() {
   const cutLabel = `${cutDay} ${MONTHS[month]} ${year}`;
   const yd = useMemo(() => monthly.map((m, i) => {
     const base = year === 2026
-      ? { rtdT: targets[i]!.rtd * JUTA, rtsT: targets[i]!.rts * JUTA, rtdR: m.rtdReal, rtsR: m.rtsReal, rtdLY: m.rtdLY, rtsLY: m.rtsLY }
+      ? { rtdT: targets[i]!.rtd, rtsT: targets[i]!.rts, rtdR: m.rtdReal, rtsR: m.rtsReal, rtdLY: m.rtdLY, rtsLY: m.rtsLY }
       : { rtdT: m.rtdLY * 1.05, rtsT: m.rtsLY * 1.05, rtdR: m.rtdLY, rtsR: m.rtsLY, rtdLY: m.rtdLY * 0.92, rtsLY: m.rtsLY * 0.92 };
     if (i > month) return { ...base, rtdR: 0, rtsR: 0 };
     if (i === month && frac < 1) return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
@@ -166,8 +168,8 @@ function Dashboard() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="glass-card relative overflow-hidden p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
-                  <p className="mt-4 whitespace-nowrap font-display text-3xl font-semibold">{fmt(real)}</p>
-                  <p className="whitespace-nowrap text-sm text-muted-foreground">dari {fmt(target)}</p>
+                  <p className="mt-4 whitespace-nowrap font-display text-3xl font-semibold" title={rpFull(real)}>{fmt(real)}</p>
+                  <p className="whitespace-nowrap text-sm text-muted-foreground" title={rpFull(target)}>dari {fmt(target)}</p>
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface">
                     <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (real / target) * 100)}%` }} />
                   </div>
@@ -175,7 +177,7 @@ function Dashboard() {
                 </div>
                 <div className="glass-card p-5">
                   <CardHead icon={Wallet} label="Net Gap Value" />
-                  <p className={cn("mt-4 whitespace-nowrap font-display text-3xl font-semibold", gap < 0 ? "text-danger" : "text-success")}>{fmt(gap)}</p>
+                  <p className={cn("mt-4 whitespace-nowrap font-display text-3xl font-semibold", gap < 0 ? "text-danger" : "text-success")} title={rpFull(gap)}>{fmt(gap)}</p>
                   <span className={cn("mt-3 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold", gap < 0 ? "bg-danger/15 text-danger" : "bg-success/15 text-success")}>
                     {gap < 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}{gap < 0 ? "Defisit" : "Surplus"}
                   </span>
@@ -212,10 +214,10 @@ function Dashboard() {
                     <ComposedChart data={rows} margin={{ left: 0, right: 0, top: 10 }}>
                       <CartesianGrid stroke="var(--border)" vertical={false} />
                       <XAxis dataKey="month" stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={12} />
-                      <YAxis yAxisId="v" stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={(v) => `${Math.round(v / 1e6)}`} width={40} />
+                      <YAxis yAxisId="v" stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={11} tickFormatter={(v) => (v >= 1e9 ? `${(v / 1e9).toFixed(1)} M` : `${Math.round(v / 1e6)} Jt`)} width={52} />
                       <YAxis yAxisId="p" orientation="right" stroke="var(--muted-foreground)" tickLine={false} axisLine={false} fontSize={11} unit="%" width={44} domain={[0, 130]} />
                       <Tooltip cursor={{ fill: "var(--surface)" }} contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 12 }}
-                        formatter={(v: number, n: string) => (n === "% Ach" ? `${v}%` : fmt(v))} />
+                        formatter={(v: number, n: string) => (n === "% Ach" ? `${v}%` : rpFull(v))} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Bar yAxisId="v" dataKey="target" name="Target" fill="var(--chart-2)" radius={[6, 6, 0, 0]} maxBarSize={22} />
                       <Bar yAxisId="v" dataKey="real" name="Realisasi" fill="var(--chart-1)" radius={[6, 6, 0, 0]} maxBarSize={22} />
@@ -311,13 +313,13 @@ function RepPicker({ selected, setSelected }: { selected: string[]; setSelected:
 type Tg = { rtd: number; rts: number }[];
 function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, mode, setMode }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void }) {
   const slots = ["URL Google Sheets: Data Tahunan (2025 Baseline)", "URL Google Sheets: Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD / RTS)", "URL Google Sheets: Monitoring Stok & DOI Depo"];
-  const edit = (i: number, k: "rtd" | "rts", v: string) => setTargets(targets.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, Number(v) || 0) } : t)));
+  const edit = (i: number, k: "rtd" | "rts", v: string) => setTargets(targets.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, cleanNum(v)) } : t)));
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground glow-primary">
         <Settings className="h-4 w-4" />Data & Target
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>Data & Target Settings</DialogTitle><DialogDescription>Sinkronisasi Google Sheets dan input target manual.</DialogDescription></DialogHeader>
         <div className="space-y-3">
           {slots.map((l, i) => (
@@ -333,13 +335,13 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
               {(i !== 2 || mode === "link") && <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div>}
               {i === 2 && mode === "manual" && (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-[3rem_1fr_1fr] gap-1.5 text-xs">
-                    <span /><span className="text-muted-foreground">RTD (Jt)</span><span className="text-muted-foreground">RTS (Jt)</span>
+                  <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(9rem,1fr)] gap-1.5 text-xs">
+                    <span /><span className="text-muted-foreground">Target RTD (Rp)</span><span className="text-muted-foreground">Target RTS (Rp)</span>
                     {targets.map((t, j) => (
                       <Fragment key={j}>
                         <span className="self-center font-semibold">{MONTHS[j]}</span>
-                        <Input className="h-8" type="number" value={t.rtd} onChange={(e) => edit(j, "rtd", e.target.value)} />
-                        <Input className="h-8" type="number" value={t.rts} onChange={(e) => edit(j, "rts", e.target.value)} />
+                        <Input className="h-8 text-right tabular-nums" inputMode="numeric" title={rpFull(t.rtd)} value={Math.round(t.rtd).toLocaleString("id-ID")} onChange={(e) => edit(j, "rtd", e.target.value)} />
+                        <Input className="h-8 text-right tabular-nums" inputMode="numeric" title={rpFull(t.rts)} value={Math.round(t.rts).toLocaleString("id-ID")} onChange={(e) => edit(j, "rts", e.target.value)} />
                       </Fragment>
                     ))}
                   </div>
