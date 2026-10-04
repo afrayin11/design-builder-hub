@@ -58,6 +58,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-accent-gold: var(--accent-gold);
+  --shadow-elevated: var(--shadow-elevated);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -70,20 +72,20 @@
 
 :root {
   --radius: 1.1rem;
-  --background: oklch(0.13 0.005 120);
+  --background: oklch(0.14 0.012 45);
   --foreground: oklch(0.97 0.01 110);
-  --card: oklch(0.19 0.006 120);
+  --card: oklch(0.2 0.014 45);
   --card-foreground: oklch(0.97 0.01 110);
-  --surface: oklch(0.23 0.007 120);
-  --popover: oklch(0.2 0.006 120);
+  --surface: oklch(0.25 0.016 45);
+  --popover: oklch(0.21 0.014 45);
   --popover-foreground: oklch(0.97 0.01 110);
-  --primary: oklch(0.91 0.21 125);
-  --primary-foreground: oklch(0.15 0.02 125);
-  --secondary: oklch(0.25 0.008 120);
+  --primary: oklch(0.7 0.19 40);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.26 0.014 45);
   --secondary-foreground: oklch(0.95 0.01 110);
-  --muted: oklch(0.25 0.008 120);
-  --muted-foreground: oklch(0.66 0.015 115);
-  --accent: oklch(0.28 0.01 120);
+  --muted: oklch(0.26 0.014 45);
+  --muted-foreground: oklch(0.7 0.02 60);
+  --accent: oklch(0.29 0.018 45);
   --accent-foreground: oklch(0.97 0.01 110);
   --destructive: oklch(0.66 0.2 25);
   --destructive-foreground: oklch(0.98 0 0);
@@ -91,22 +93,24 @@
   --danger: oklch(0.68 0.2 25);
   --warning: oklch(0.82 0.16 75);
   --info: oklch(0.72 0.14 240);
-  --border: oklch(1 0 0 / 8%);
+  --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.91 0.21 125);
-  --chart-1: oklch(0.91 0.21 125);
-  --chart-2: oklch(0.55 0.02 120);
-  --chart-3: oklch(0.78 0.14 200);
-  --chart-4: oklch(0.8 0.16 70);
+  --ring: oklch(0.7 0.19 40);
+  --chart-1: oklch(0.7 0.19 40);
+  --chart-2: oklch(0.45 0.03 50);
+  --chart-3: oklch(0.76 0.13 190);
+  --chart-4: oklch(0.84 0.16 85);
   --chart-5: oklch(0.7 0.18 330);
-  --sidebar: oklch(0.1 0.004 120);
+  --sidebar: oklch(0.12 0.01 45);
   --sidebar-foreground: oklch(0.97 0.01 110);
-  --sidebar-primary: oklch(0.91 0.21 125);
-  --sidebar-primary-foreground: oklch(0.15 0.02 125);
-  --sidebar-accent: oklch(0.22 0.006 120);
+  --sidebar-primary: oklch(0.7 0.19 40);
+  --sidebar-primary-foreground: oklch(0.99 0.005 60);
+  --sidebar-accent: oklch(0.24 0.016 45);
   --sidebar-accent-foreground: oklch(0.97 0.01 110);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.91 0.21 125);
+  --sidebar-ring: oklch(0.7 0.19 40);
+  --accent-gold: oklch(0.84 0.16 85);
+  --shadow-elevated: 0 1px 0 0 oklch(1 0 0 / 6%) inset, 0 10px 30px -12px oklch(0 0 0 / 60%);
   --glow-primary: 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent), 0 20px 50px -20px color-mix(in oklab, var(--primary) 45%, transparent);
 }
 
@@ -124,11 +128,15 @@
 }
 
 @utility glass-card {
-  background: linear-gradient(160deg, color-mix(in oklab, var(--card) 92%, var(--foreground) 8%), var(--card));
+  background: linear-gradient(160deg, color-mix(in oklab, var(--card) 88%, var(--foreground) 12%), var(--card) 55%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  transition: transform .25s ease, border-color .25s ease;
-  &:hover { transform: translateY(-3px); border-color: color-mix(in oklab, var(--primary) 35%, transparent); }
+  box-shadow: var(--shadow-elevated);
+  backdrop-filter: blur(12px);
+  transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+  &:hover { transform: translateY(-3px); border-color: color-mix(in oklab, var(--primary) 40%, transparent); box-shadow: var(--shadow-elevated), 0 18px 40px -20px color-mix(in oklab, var(--primary) 45%, transparent); }
 }
 @utility glow-primary { box-shadow: var(--glow-primary); }
 @layer base { body { font-family: var(--font-sans); } .font-display { font-family: var(--font-display); } }
+
+@utility no-scrollbar { scrollbar-width: none; &::-webkit-scrollbar { display: none; } }
