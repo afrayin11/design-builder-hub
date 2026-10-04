@@ -26,9 +26,9 @@ export const CLOSED_MONTHS = 7;
 const JT = 1_000_000;
 export const monthly = MONTHS.map((m, i) => ({
   month: m,
-  rtdTarget: rtdT[i] * JT, rtsTarget: rtsT[i] * JT,
-  rtdReal: rtdR[i] * JT, rtsReal: rtsR[i] * JT,
-  rtdLY: rtdLY[i] * JT, rtsLY: rtsLY[i] * JT,
+  rtdTarget: rtdT[i]! * JT, rtsTarget: rtsT[i]! * JT,
+  rtdReal: rtdR[i]! * JT, rtsReal: rtsR[i]! * JT,
+  rtdLY: rtdLY[i]! * JT, rtsLY: rtsLY[i]! * JT,
 }));
 
 export const BRANDS = [
@@ -46,3 +46,36 @@ export const OUTLETS = outletNames.map((n, i) => ({
   channel: CHANNELS[i % 4],
   value: Math.round((185 - i * 10.5 - (i % 3) * 2) * JT),
 }));
+
+export type Period = "mtd" | "ytd" | "yoy";
+// Packaging breakdown: mtd/ytd volume (krat/ctn) & value (IDR), ly = same period 2025
+export const PACKAGING = [
+  { cat: "AMDK", brand: "Prim-A", mtdVol: 18400, mtdVal: 21.6e9, ytdVol: 121800, ytdVal: 143.2e9, lyYtdVal: 131.0e9, lyMtdVal: 20.1e9 },
+  { cat: "PET", brand: "Fruit Tea / Sosro", mtdVol: 26200, mtdVal: 48.3e9, ytdVol: 176500, ytdVal: 322.4e9, lyYtdVal: 289.5e9, lyMtdVal: 44.0e9 },
+  { cat: "TETRA", brand: "Teh Kotak / Joy Tea", mtdVol: 15800, mtdVal: 27.9e9, ytdVol: 108200, ytdVal: 189.6e9, lyYtdVal: 196.1e9, lyMtdVal: 29.4e9 },
+  { cat: "RGB", brand: "Teh Botol Sosro Returnable Glass", mtdVol: 31500, mtdVal: 39.4e9, ytdVol: 219300, ytdVal: 271.8e9, lyYtdVal: 284.7e9, lyMtdVal: 41.2e9 },
+  { cat: "RTS", brand: "Teh Celup / Seduh", mtdVol: 9600, mtdVal: 19.8e9, ytdVol: 67900, ytdVal: 138.5e9, lyYtdVal: 121.9e9, lyMtdVal: 17.6e9 },
+  { cat: "CAN", brand: "Tebs / Fruit Tea Can", mtdVol: 7200, mtdVal: 16.1e9, ytdVol: 48100, ytdVal: 107.3e9, lyYtdVal: 99.8e9, lyMtdVal: 15.9e9 },
+];
+
+export const STOCK_GROUPS = ["FRUIT TEA CAN", "TEBS CAN", "FRUIT TEA PET K12", "FRUIT TEA PET K24", "RGB", "AMDK", "RTS"] as const;
+export type StockGroup = (typeof STOCK_GROUPS)[number];
+export interface StockItem { code: string; name: string; group: StockGroup; pack: string; pcsPerCtn: number; price: number; ctn: number; bdp: number; avg: number }
+export const STOCK: StockItem[] = [
+  { code: "FTC20", name: "Fruit Tea Apel Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 420, bdp: 120, avg: 95 },
+  { code: "FTC21", name: "Fruit Tea Blackcurrant Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 1650, bdp: 0, avg: 60 },
+  { code: "FTC22", name: "Fruit Tea Strawberry Can", group: "FRUIT TEA CAN", pack: "24 / 318 Ml", pcsPerCtn: 24, price: 118000, ctn: 780, bdp: 200, avg: 52 },
+  { code: "TSC20", name: "Tebs Sparkling Tea Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 310, bdp: 0, avg: 48 },
+  { code: "TSC21", name: "Tebs Lemon Can", group: "TEBS CAN", pack: "24 / 330 Ml", pcsPerCtn: 24, price: 132000, ctn: 540, bdp: 150, avg: 31 },
+  { code: "FTE30", name: "Fruit Tea Apel PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 2100, bdp: 400, avg: 180 },
+  { code: "FTE31", name: "Fruit Tea Blackcurrant PET", group: "FRUIT TEA PET K12", pack: "12 / 350 Ml", pcsPerCtn: 12, price: 54000, ctn: 960, bdp: 0, avg: 160 },
+  { code: "FTE33", name: "Fruit Tea Freeze PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 2850, bdp: 300, avg: 140 },
+  { code: "FTE01", name: "Fruit Tea Xtreme PET", group: "FRUIT TEA PET K24", pack: "24 / 500 Ml", pcsPerCtn: 24, price: 98000, ctn: 640, bdp: 100, avg: 72 },
+  { code: "TBS01", name: "Teh Botol Sosro RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 72000, ctn: 5200, bdp: 800, avg: 410 },
+  { code: "TBS02", name: "Teh Botol Sosro Less Sugar RGB", group: "RGB", pack: "24 / 220 Ml", pcsPerCtn: 24, price: 74000, ctn: 900, bdp: 0, avg: 150 },
+  { code: "PRA60", name: "Prim-A Air Mineral", group: "AMDK", pack: "24 / 600 Ml", pcsPerCtn: 24, price: 42000, ctn: 3400, bdp: 600, avg: 260 },
+  { code: "PRA15", name: "Prim-A Air Mineral 1.5L", group: "AMDK", pack: "12 / 1500 Ml", pcsPerCtn: 12, price: 46000, ctn: 1200, bdp: 0, avg: 35 },
+  { code: "TCS25", name: "Teh Celup Sosro", group: "RTS", pack: "48 / 25 Sachet", pcsPerCtn: 48, price: 210000, ctn: 380, bdp: 50, avg: 22 },
+  { code: "TSD40", name: "Teh Seduh Sosro", group: "RTS", pack: "40 / 40 Gr", pcsPerCtn: 40, price: 165000, ctn: 150, bdp: 0, avg: 25 },
+];
+export const TARGET_DOI = 21;

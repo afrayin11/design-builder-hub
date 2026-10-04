@@ -23,6 +23,8 @@
   --font-display: "Space Grotesk", ui-sans-serif, sans-serif;
   --color-success: var(--success);
   --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-surface: var(--surface);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -87,6 +89,8 @@
   --destructive-foreground: oklch(0.98 0 0);
   --success: oklch(0.78 0.17 150);
   --danger: oklch(0.68 0.2 25);
+  --warning: oklch(0.82 0.16 75);
+  --info: oklch(0.72 0.14 240);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.91 0.21 125);
