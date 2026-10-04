@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   Activity, BarChart3, ChevronDown, Gauge, LayoutDashboard, PieChart as PieIcon, Search, Settings,
-  Table2, Target, TrendingDown, TrendingUp, Users, Wallet, Scale, Link2, Warehouse,
+  Table2, Target, CalendarDays, TrendingDown, TrendingUp, Users, Wallet, Scale, Link2, Warehouse,
 } from "lucide-react";
 import {
   Bar, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { StockMonitor } from "@/components/StockMonitor";
-import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
+import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel } from "@/lib/sosro-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -49,6 +49,40 @@ function Dashboard() {
   const [view, setView] = useState<"exec" | "stock">("exec");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [period, setPeriod] = useState<Period>("ytd");
+  const [year, setYear] = useState(2026);
+  const [month, setMonth] = useState(CLOSED_MONTHS - 1);
+  const [cutoff, setCutoff] = useState<"full" | "daily">("full");
+  const [today, setToday] = useState(1);
+  const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
+  const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget / JUTA, rts: m.rtsTarget / JUTA })));
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setToday(new Date().getDate());
+    try {
+      const d = JSON.parse(localStorage.getItem("sosro-settings") || "{}");
+      if (d.selected) setSelected(d.selected); if (d.targetAdj) setTargetAdj(d.targetAdj);
+      if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff);
+      if (d.targets?.length === 12) setTargets(d.targets); if (d.targetMode) setTargetMode(d.targetMode);
+    } catch { /* ignore */ }
+    setLoaded(true);
+  }, []);
+  useEffect(() => {
+    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ selected, targetAdj, year, month, cutoff, targets, targetMode }));
+  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode]);
+
+  const days = new Date(year, month + 1, 0).getDate();
+  const cutDay = cutoff === "full" ? days : Math.min(today, days);
+  const frac = cutDay / days;
+  const cutLabel = `${cutDay} ${MONTHS[month]} ${year}`;
+  const yd = useMemo(() => monthly.map((m, i) => {
+    const base = year === 2026
+      ? { rtdT: targets[i]!.rtd * JUTA, rtsT: targets[i]!.rts * JUTA, rtdR: m.rtdReal, rtsR: m.rtsReal, rtdLY: m.rtdLY, rtsLY: m.rtsLY }
+      : { rtdT: m.rtdLY * 1.05, rtsT: m.rtsLY * 1.05, rtdR: m.rtdLY, rtsR: m.rtsLY, rtdLY: m.rtdLY * 0.92, rtsLY: m.rtsLY * 0.92 };
+    if (i > month) return { ...base, rtdR: 0, rtsR: 0 };
+    if (i === month && frac < 1) return { rtdT: base.rtdT * frac, rtsT: base.rtsT * frac, rtdR: base.rtdR * frac, rtsR: base.rtsR * frac, rtdLY: base.rtdLY * frac, rtsLY: base.rtsLY * frac };
+    return base;
+  }), [year, month, frac, targets]);
 
   const factor = useMemo(() => {
     const w = REPS.filter((r) => selected.includes(r.id) && (channel === "All" || r.channel === channel)).reduce((a, r) => a + r.weight, 0);
@@ -56,19 +90,25 @@ function Dashboard() {
   }, [selected, channel]);
 
   const rows = useMemo(() => monthly.map((m) => {
-    const t = cat === "rtd" ? m.rtdTarget : cat === "rts" ? m.rtsTarget : m.rtdTarget + m.rtsTarget;
-    const r = cat === "rtd" ? m.rtdReal : cat === "rts" ? m.rtsReal : m.rtdReal + m.rtsReal;
+    const d = yd[monthly.indexOf(m)]!;
+    const t = cat === "rtd" ? d.rtdT : cat === "rts" ? d.rtsT : d.rtdT + d.rtsT;
+    const r = cat === "rtd" ? d.rtdR : cat === "rts" ? d.rtsR : d.rtdR + d.rtsR;
     const target = t * factor * (targetAdj / 100), real = r * factor;
     return { month: m.month, target, real: real || null, ach: real ? +(real / target * 100).toFixed(1) : null };
-  }), [factor, cat, targetAdj]);
+  }), [factor, cat, targetAdj, yd]);
 
-  const ytd = monthly.slice(0, CLOSED_MONTHS);
-  const sum = (k: keyof (typeof monthly)[0]) => ytd.reduce((a, m) => a + (m[k] as number), 0) * factor;
-  const real = sum("rtdReal") + sum("rtsReal");
-  const target = (sum("rtdTarget") + sum("rtsTarget")) * (targetAdj / 100);
-  const ly = sum("rtdLY") + sum("rtsLY");
+  const cm = yd[month]!;
+  const real = (cm.rtdR + cm.rtsR) * factor;
+  const target = (cm.rtdT + cm.rtsT) * factor * (targetAdj / 100);
+  const ly = (cm.rtdLY + cm.rtsLY) * factor;
   const gap = real - target, growth = ly ? real / ly - 1 : 0;
-  const rtdShare = real ? sum("rtdReal") / real : 0;
+  const rtdShare = real ? cm.rtdR * factor / real : 0;
+  // scaling vs reference (Jul 2026 MTD / YTD) for brand & pareto mock data
+  const refM = monthly[CLOSED_MONTHS - 1]!.rtdReal + monthly[CLOSED_MONTHS - 1]!.rtsReal;
+  const refY = monthly.slice(0, CLOSED_MONTHS).reduce((a, m) => a + m.rtdReal + m.rtsReal, 0);
+  const mScale = (cm.rtdR + cm.rtsR) / refM;
+  const yScale = yd.reduce((a, d) => a + d.rtdR + d.rtsR, 0) / refY;
+  const perLabel = `${MONTHS_ID[month]} ${year}`;
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -97,7 +137,18 @@ function Dashboard() {
               ))}
             </div>
             <RepPicker selected={selected} setSelected={setSelected} />
-            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} />
+            <SettingsModal open={settingsOpen} setOpen={setSettingsOpen} targetAdj={targetAdj} setTargetAdj={setTargetAdj} targets={targets} setTargets={setTargets} mode={targetMode} setMode={setTargetMode} />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 px-5 pb-3 lg:px-8">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            <select aria-label="Filter Tahun" value={year} onChange={(e) => setYear(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{YEARS.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+            <select aria-label="Filter Bulan" value={month} onChange={(e) => setMonth(+e.target.value)} className="h-8 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground">{MONTHS_ID.map((m, i) => <option key={m} value={i}>{m}</option>)}</select>
+            <div className="flex rounded-full border border-border bg-card p-1">
+              {([["full", "Akhir Bulan / Full Month"], ["daily", "Harian Berjalan / Cut-off Hari Ini"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setCutoff(k)} className={cn("rounded-full px-3 py-1 text-xs font-semibold", cutoff === k ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}>{l}</button>
+              ))}
+            </div>
+            <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">Cut-off per: {cutLabel}</span>
           </div>
           <div className="flex flex-wrap gap-1 px-5 pb-3 lg:px-8">
             <button onClick={() => setView(view === "exec" ? "stock" : "exec")} className="rounded-full bg-card px-3 py-1 text-xs font-semibold text-muted-foreground md:hidden">{view === "exec" ? "→ Stok & DOI" : "→ Dashboard"}</button>
@@ -108,10 +159,10 @@ function Dashboard() {
         </header>
 
         <main className="space-y-6 p-5 lg:p-8">
-          {view === "stock" && <StockMonitor />}
+          {view === "stock" && <StockMonitor cutoffLabel={cutLabel} />}
           {view === "exec" && tab === 0 && (
             <>
-              <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`YTD Jan – ${MONTHS[CLOSED_MONTHS - 1]} 2026`} />
+              <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`Periode: ${perLabel} (vs Baseline ${year - 1})`} />
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="glass-card relative overflow-hidden p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
@@ -130,9 +181,9 @@ function Dashboard() {
                   </span>
                 </div>
                 <div className="glass-card p-5">
-                  <CardHead icon={TrendingUp} label="Growth YoY" />
+                  <CardHead icon={TrendingUp} label="Growth YoY (bulan)" />
                   <p className={cn("mt-4 font-display text-3xl font-semibold", growth < 0 ? "text-danger" : "text-success")}>{growth >= 0 ? "+" : ""}{pct(growth)}</p>
-                  <p className="mt-1 whitespace-nowrap text-sm text-muted-foreground">2026 vs 2025 · {fmt(ly)} LY</p>
+                  <p className="mt-1 whitespace-nowrap text-sm text-muted-foreground">{year} vs {year - 1} · {fmt(ly)} LY</p>
                 </div>
                 <div className="glass-card p-5">
                   <CardHead icon={Scale} label="RTD vs RTS Share" />
@@ -177,19 +228,19 @@ function Dashboard() {
               <Accordion type="single" collapsible className="glass-card px-5 hover:translate-y-0">
                 <AccordionItem value="t" className="border-0">
                   <AccordionTrigger className="hover:no-underline"><span className="flex items-center gap-2 font-semibold"><Table2 className="h-4 w-4 text-primary" />Lihat Tabel Data Rinci (RTD & RTS)</span></AccordionTrigger>
-                  <AccordionContent><DetailTable factor={factor} adj={targetAdj / 100} /></AccordionContent>
+                  <AccordionContent><DetailTable yd={yd} month={month} factor={factor} adj={targetAdj / 100} /></AccordionContent>
                 </AccordionItem>
               </Accordion>
             </>
           )}
 
-          {view === "exec" && tab === 1 && <BrandSlide period={period} setPeriod={setPeriod} factor={factor} />}
+          {view === "exec" && tab === 1 && <BrandSlide period={period} setPeriod={setPeriod} factor={factor} mScale={mScale} yScale={yScale} perLabel={perLabel} />}
 
           {view === "exec" && tab === 2 && (
             <>
-              <SectionTitle n="03" title="Top 15 Pareto Outlet" sub="Kontribusi kumulatif terhadap total realisasi" />
+              <SectionTitle n="03" title="Top 15 Pareto Outlet" sub={`Top 15 Pareto s/d ${perLabel}`} />
               <div className="glass-card overflow-x-auto p-5 hover:translate-y-0">
-                <ParetoTable factor={factor} />
+                <ParetoTable factor={factor * yScale} />
               </div>
             </>
           )}
@@ -257,8 +308,10 @@ function RepPicker({ selected, setSelected }: { selected: string[]; setSelected:
   );
 }
 
-function SettingsModal({ open, setOpen, targetAdj, setTargetAdj }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void }) {
-  const slots = ["Data Tahunan / 2025 Baseline", "Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD vs RTS)", "Data Monitoring Stok & DOI Depo"];
+type Tg = { rtd: number; rts: number }[];
+function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTargets, mode, setMode }: { open: boolean; setOpen: (b: boolean) => void; targetAdj: number; setTargetAdj: (n: number) => void; targets: Tg; setTargets: (t: Tg) => void; mode: "link" | "manual"; setMode: (m: "link" | "manual") => void }) {
+  const slots = ["URL Google Sheets: Data Tahunan (2025 Baseline)", "URL Google Sheets: Data Realisasi Bulan Berjalan 2026", "Target 2026 (RTD / RTS)", "URL Google Sheets: Monitoring Stok & DOI Depo"];
+  const edit = (i: number, k: "rtd" | "rts", v: string) => setTargets(targets.map((t, j) => (j === i ? { ...t, [k]: Math.max(0, Number(v) || 0) } : t)));
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground glow-primary">
@@ -270,9 +323,30 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj }: { open: boole
           {slots.map((l, i) => (
             <div key={l} className="space-y-2 rounded-xl border border-border bg-surface/50 p-3">
               <Label className="flex items-center gap-2"><span className="grid h-5 w-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">{i + 1}</span>{l}</Label>
-              <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div>
-              {i === 2 && (<div className="space-y-1"><Label className="text-xs text-muted-foreground">Input manual · Penyesuaian Target (%)</Label>
-                <Input type="number" value={targetAdj} onChange={(e) => setTargetAdj(Math.max(1, Number(e.target.value) || 100))} /></div>)}
+              {i === 2 && (
+                <div className="flex rounded-full bg-card p-1">
+                  {([["link", "Link Google Sheets Target"], ["manual", "Input Manual Grid"]] as const).map(([k, t]) => (
+                    <button key={k} onClick={() => setMode(k)} className={cn("flex-1 rounded-full px-3 py-1 text-xs font-semibold", mode === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{t}</button>
+                  ))}
+                </div>
+              )}
+              {(i !== 2 || mode === "link") && <div className="relative"><Link2 className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="https://docs.google.com/spreadsheets/..." /></div>}
+              {i === 2 && mode === "manual" && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[3rem_1fr_1fr] gap-1.5 text-xs">
+                    <span /><span className="text-muted-foreground">RTD (Jt)</span><span className="text-muted-foreground">RTS (Jt)</span>
+                    {targets.map((t, j) => (
+                      <Fragment key={j}>
+                        <span className="self-center font-semibold">{MONTHS[j]}</span>
+                        <Input className="h-8" type="number" value={t.rtd} onChange={(e) => edit(j, "rtd", e.target.value)} />
+                        <Input className="h-8" type="number" value={t.rts} onChange={(e) => edit(j, "rts", e.target.value)} />
+                      </Fragment>
+                    ))}
+                  </div>
+                  <Label className="text-xs text-muted-foreground">Penyesuaian Target (%)</Label>
+                  <Input type="number" value={targetAdj} onChange={(e) => setTargetAdj(Math.max(1, Number(e.target.value) || 100))} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -281,21 +355,23 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj }: { open: boole
   );
 }
 
-function BrandSlide({ period, setPeriod, factor }: { period: Period; setPeriod: (p: Period) => void; factor: number }) {
+function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel }: { period: Period; setPeriod: (p: Period) => void; factor: number; mScale: number; yScale: number; perLabel: string }) {
+  const [open, setOpen] = useState<string | null>(null);
   const rows = PACKAGING.map((p) => {
-    const vol = (period === "mtd" ? p.mtdVol : p.ytdVol) * factor;
-    const val = (period === "mtd" ? p.mtdVal : p.ytdVal) * factor;
+    const sc = period === "mtd" ? mScale : yScale;
+    const vol = (period === "mtd" ? p.mtdVol : p.ytdVol) * factor * sc;
+    const val = (period === "mtd" ? p.mtdVal : p.ytdVal) * factor * sc;
     const gwt = period === "mtd" ? p.mtdVal / p.lyMtdVal - 1 : p.ytdVal / p.lyYtdVal - 1;
     return { ...p, vol, val, gwt };
   });
-  const total = rows.reduce((a, r) => a + r.val, 0);
+  const total = rows.reduce((a, r) => a + r.val, 0) || 1;
   const totalVol = rows.reduce((a, r) => a + r.vol, 0);
-  const lyTotal = PACKAGING.reduce((a, p) => a + (period === "mtd" ? p.lyMtdVal : p.lyYtdVal), 0) * factor;
+  const lyTotal = PACKAGING.reduce((a, p) => a + (period === "mtd" ? p.lyMtdVal * mScale : p.lyYtdVal * yScale), 0) * factor || 1;
   const pie = rows.map((r) => ({ name: r.cat, value: period === "yoy" ? Math.max(0, +(r.gwt * 100).toFixed(1)) || 0.1 : +(r.val / total * 100).toFixed(1) }));
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <SectionTitle n="02" title="Brand & Packaging Distribution Analysis" sub={period === "mtd" ? `Bulan Berjalan · ${MONTHS[CLOSED_MONTHS - 1]} 2026` : period === "ytd" ? `YTD Jan – ${MONTHS[CLOSED_MONTHS - 1]} 2026` : "Pertumbuhan YTD 2026 vs 2025"} />
+        <SectionTitle n="02" title="Brand & Packaging Distribution Analysis" sub={period === "mtd" ? `Periode: ${perLabel}` : period === "ytd" ? `Kumulatif YTD s/d ${perLabel}` : `Pertumbuhan YTD s/d ${perLabel} vs tahun lalu`} />
         <div className="flex rounded-full border border-border bg-card p-1">
           {([["mtd", "Bulan Berjalan / MTD"], ["ytd", "YTD"], ["yoy", "YoY Growth (% GWT)"]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setPeriod(k)} className={cn("rounded-full px-3.5 py-1.5 text-xs font-semibold", period === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{l}</button>
@@ -328,13 +404,26 @@ function BrandSlide({ period, setPeriod, factor }: { period: Period; setPeriod: 
               <th className="py-2 text-left">Kategori / Kemasan</th><th className="text-right">Volume (Krat/CTN)</th><th className="text-right">Omset (IDR)</th><th className="text-right">Kontribusi</th><th className="text-right">% GWT</th></tr></thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.cat} className="border-b border-border/60">
-                  <td className="py-3"><div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[i] }} /><div><p className="font-semibold">{r.cat}</p><p className="text-xs text-muted-foreground">{r.brand}</p></div></div></td>
+                <Fragment key={r.cat}>
+                <tr className="cursor-pointer border-b border-border/60 hover:bg-surface/50" onClick={() => setOpen(open === r.cat ? null : r.cat)}>
+                  <td className="py-3"><div className="flex items-center gap-2"><ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open !== r.cat && "-rotate-90")} /><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[i] }} /><div><p className="font-semibold">{r.cat}</p><p className="text-xs text-muted-foreground">{r.brand}</p></div></div></td>
                   <td className="whitespace-nowrap text-right tabular-nums">{Math.round(r.vol).toLocaleString("id-ID")}</td>
                   <td className="whitespace-nowrap text-right tabular-nums">{fmt(r.val)}</td>
                   <td className="text-right tabular-nums">{pct(r.val / total)}</td>
                   <td className="text-right"><span className={cn("whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold", r.gwt >= 0 ? "bg-success/15 text-success" : "bg-danger/15 text-danger")}>{r.gwt >= 0 ? "+" : ""}{pct(r.gwt)}</span></td>
                 </tr>
+                {open === r.cat && CATEGORY_MAP[r.cat as PackCat].map((b, j, arr) => {
+                  const w = (arr.length - j) / ((arr.length * (arr.length + 1)) / 2);
+                  return (
+                    <tr key={b} className="border-b border-border/40 bg-surface/30 text-xs">
+                      <td className="py-2 pl-10 text-muted-foreground">{b}</td>
+                      <td className="text-right tabular-nums">{Math.round(r.vol * w).toLocaleString("id-ID")}</td>
+                      <td className="whitespace-nowrap text-right tabular-nums">{fmt(r.val * w)}</td>
+                      <td className="text-right tabular-nums">{pct((r.val * w) / total)}</td><td />
+                    </tr>
+                  );
+                })}
+                </Fragment>
               ))}
               <tr className="font-bold"><td className="py-3">TOTAL</td><td className="text-right tabular-nums">{Math.round(totalVol).toLocaleString("id-ID")}</td><td className="whitespace-nowrap text-right tabular-nums">{fmt(total)}</td><td className="text-right">100%</td>
                 <td className="text-right"><span className={cn("rounded-full px-2 py-0.5 text-xs", total >= lyTotal ? "bg-success/15 text-success" : "bg-danger/15 text-danger")}>{total >= lyTotal ? "+" : ""}{pct(total / lyTotal - 1)}</span></td></tr>
@@ -346,7 +435,7 @@ function BrandSlide({ period, setPeriod, factor }: { period: Period; setPeriod: 
   );
 }
 
-function DetailTable({ factor, adj }: { factor: number; adj: number }) {
+function DetailTable({ yd, month, factor, adj }: { yd: { rtdT: number; rtsT: number; rtdR: number; rtsR: number }[]; month: number; factor: number; adj: number }) {
   const cell = "whitespace-nowrap px-3 py-2 text-right tabular-nums";
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -356,11 +445,12 @@ function DetailTable({ factor, adj }: { factor: number; adj: number }) {
             {["Target RTD", "Real RTD", "Ach RTD", "Target RTS", "Real RTS", "Ach RTS", "Gap Total"].map((h) => <th key={h} className={cell}>{h}</th>)}</tr>
         </thead>
         <tbody>
-          {monthly.map((m) => {
-            const tR = m.rtdTarget * factor * adj, rR = m.rtdReal * factor, tS = m.rtsTarget * factor * adj, rS = m.rtsReal * factor;
-            const g = rR + rS - tR - tS, open = !m.rtdReal;
+          {monthly.map((m, i) => {
+            const d = yd[i]!;
+            const tR = d.rtdT * factor * adj, rR = d.rtdR * factor, tS = d.rtsT * factor * adj, rS = d.rtsR * factor;
+            const g = rR + rS - tR - tS, open = !d.rtdR;
             return (
-              <tr key={m.month} className="border-t border-border hover:bg-surface/50">
+              <tr key={m.month} className={cn("border-t border-border hover:bg-surface/50", i === month && "bg-primary/15 outline outline-1 outline-primary/50")}>
                 <td className="px-3 py-2 font-semibold">{m.month}</td>
                 <td className={cell}>{fmt(tR)}</td><td className={cell}>{open ? "–" : fmt(rR)}</td>
                 <td className={cn(cell, !open && (rR >= tR ? "text-success" : "text-danger"))}>{open ? "–" : pct(rR / tR)}</td>
