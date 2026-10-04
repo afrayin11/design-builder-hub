@@ -4,6 +4,8 @@ import { classifyBrand, type Channel, type PackCat } from "@/lib/sosro-data";
 export interface DmsRow {
   y: number; m: number; d: number; ch: Channel; sales: string; cust: string; sku: string;
   brand: string; cat: PackCat | null; rts: boolean; amt: number; ctn: number; code: string; sale: boolean;
+  /** persisted summary rows: "v" = value only (no customer), "c" = customer total only */
+  only?: "v" | "c";
 }
 
 /** Salesman master: name -> filter channel + display badge */
@@ -60,9 +62,9 @@ function mapRow(r: Record<string, string>): DmsRow | null {
   const m = bulan >= 1 && bulan <= 12 ? bulan : dt!.m;
   const brand = g("BRAND") || g("PRODUCTGROUP3");
   const cls = `${g("BRAND")} ${g("PRODUCTGROUP3")} ${g("NAMAPRODUK")} ${g("PACKAGING")}`;
-  // Revenue basis = DPP (excl. 11% PPN); fallback NETAMOUNT / 1.11
+  // Revenue basis = raw DPP summed directly (no division); fallback NETAMOUNT
   const dppRaw = g("DPP").trim();
-  let amt = dppRaw ? num(dppRaw) : num(g("NETAMOUNT")) / 1.11;
+  let amt = dppRaw ? num(dppRaw) : num(g("NETAMOUNT"));
   const tipe = g("TIPETRANS").toLowerCase();
   const isReturn = /retur/.test(tipe);
   if (isReturn && amt > 0) amt = -amt; // returns reduce net sales (no double-negation)
@@ -106,3 +108,39 @@ export async function fetchDms(url: string): Promise<DmsRow[]> {
   if (text.trimStart().startsWith("<")) throw new Error("Sheet tidak publik — bagikan ke \"Siapa saja yang memiliki link\".");
   return parseDms(text);
 }
+
+const SUMMARY_KEY = "sosro_aggregated_sales";
+type Summary = { v: 1; byMonth: Record<string, Record<string, { rtd: number; rts: number; salesmen: Record<string, { rtd: number; rts: number }> }>>; rows: (string | number | null)[][]; cust: (string | number)[][] };
+
+/** Compress raw DMS rows into a lightweight summary and persist it. */
+export function saveSummary(rows: DmsRow[]) {
+  const byMonth: Summary["byMonth"] = {};
+  const v = new Map<string, DmsRow>(), c = new Map<string, DmsRow>();
+  for (const r of rows) {
+    const mo = ((byMonth[r.y] ??= {})[MONTHS_S[r.m - 1]!] ??= { rtd: 0, rts: 0, salesmen: {} });
+    const sm = (mo.salesmen[r.sales] ??= { rtd: 0, rts: 0 });
+    if (r.rts) { mo.rts += r.amt; sm.rts += r.amt; } else { mo.rtd += r.amt; sm.rtd += r.amt; }
+    const kv = `${r.y}|${r.m}|${r.d}|${r.sales}|${r.ch}|${r.cat}|${r.rts}`;
+    const a = v.get(kv); if (a) { a.amt += r.amt; a.ctn += r.ctn; } else v.set(kv, { ...r, cust: "", sku: "", brand: "", code: "", only: "v" });
+    const kc = `${r.y}|${r.m}|${r.sales}|${r.ch}|${r.cust}`;
+    const b = c.get(kc); if (b) b.amt += r.amt; else c.set(kc, { ...r, d: 1, sku: "", brand: "", code: "", cat: null, ctn: 0, only: "c" });
+  }
+  const sum: Summary = {
+    v: 1, byMonth,
+    rows: [...v.values()].map((r) => [r.y, r.m, r.d, r.sales, r.ch, r.cat, r.rts ? 1 : 0, Math.round(r.amt), Math.round(r.ctn * 100) / 100]),
+    cust: [...c.values()].filter((r) => r.amt).map((r) => [r.y, r.m, r.sales, r.ch, r.cust, Math.round(r.amt)]),
+  };
+  try { localStorage.setItem(SUMMARY_KEY, JSON.stringify(sum)); } catch { /* quota */ }
+}
+export function loadSummary(): DmsRow[] | null {
+  try {
+    const s = JSON.parse(localStorage.getItem(SUMMARY_KEY) || "null") as Summary | null;
+    if (!s?.rows) return null;
+    const base = { sku: "", brand: "", code: "", sale: false };
+    return [
+      ...s.rows.map(([y, m, d, sales, ch, cat, rts, amt, ctn]) => ({ ...base, y: +y!, m: +m!, d: +d!, sales: String(sales), ch: ch as Channel, cat: (cat as PackCat) || null, rts: !!rts, amt: +amt!, ctn: +ctn!, cust: "", only: "v" as const })),
+      ...s.cust.map(([y, m, sales, ch, cust, amt]) => ({ ...base, y: +y!, m: +m!, d: 1, sales: String(sales), ch: ch as Channel, cat: null, rts: false, amt: +amt!, ctn: 0, cust: String(cust), only: "c" as const })),
+    ];
+  } catch { return null; }
+}
+const MONTHS_S = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
