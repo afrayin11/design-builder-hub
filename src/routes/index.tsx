@@ -18,7 +18,7 @@ import { StockMonitor } from "@/components/StockMonitor";
 import { PACKAGING, type Period, CHANNELS, CLOSED_MONTHS, MONTHS, MONTHS_ID, YEARS, JUTA, CATEGORY_MAP, type PackCat, OUTLETS, REPS, TOTAL_WEIGHT, monthly, type Channel, type Rep } from "@/lib/sosro-data";
 import { fetchDms, parseDms, type DmsRow } from "@/lib/dms";
 type PackRow = (typeof PACKAGING)[number];
-type Outlet = { name: string; channel: string; value: number };
+type Outlet = { name: string; channel?: string | undefined; value: number };
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -445,7 +445,7 @@ function SettingsModal({ open, setOpen, targetAdj, setTargetAdj, targets, setTar
   );
 }
 
-function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel, pack }: { period: Period; setPeriod: (p: Period) => void; factor: number; mScale: number; yScale: number; perLabel: string; pack?: PackRow[] }) {
+function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel, pack }: { period: Period; setPeriod: (p: Period) => void; factor: number; mScale: number; yScale: number; perLabel: string; pack?: PackRow[] | undefined }) {
   const SRC = pack ?? PACKAGING;
   const [open, setOpen] = useState<string | null>(null);
   const rows = SRC.map((p) => {
@@ -589,7 +589,7 @@ function DetailTable({ yd, month, factor, adj }: { yd: YD[]; month: number; fact
   );
 }
 
-function ParetoTable({ factor, outlets, total: realTotal }: { factor: number; outlets?: Outlet[]; total?: number }) {
+function ParetoTable({ factor, outlets, total: realTotal }: { factor: number; outlets?: Outlet[] | undefined; total?: number | undefined }) {
   const list: Outlet[] = outlets ?? OUTLETS;
   const f = outlets ? 1 : factor;
   const total = (outlets ? realTotal || 1 : OUTLETS.reduce((a, o) => a + o.value, 0) / 0.62);
