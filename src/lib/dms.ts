@@ -8,7 +8,7 @@ export interface DmsRow {
 
 /** Salesman master: name -> filter channel + display badge */
 export const SALES_MASTER: { key: string; name: string; channel: Channel; badge: string }[] = [
-  { key: "NANANG", name: "Nanang", channel: "MT", badge: "LOKMAN" },
+  { key: "NANANG", name: "Nanang", channel: "Horeca", badge: "HORECA" },
   { key: "NOVITA", name: "Novita", channel: "MT", badge: "MOT" },
   { key: "NKA SOS", name: "NKA SOS", channel: "NKA", badge: "NKA" },
   { key: "BACHTIAR", name: "Bachtiar", channel: "GT", badge: "GT" },

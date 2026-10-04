@@ -337,14 +337,14 @@ function CardHead({ icon: I, label }: { icon: typeof Target; label: string }) {
   );
 }
 
-const BADGE: Record<string, string> = { LOKMAN: "bg-info/15 text-info", MOT: "bg-chart-5/15 text-chart-5", NKA: "bg-warning/15 text-warning", GT: "bg-success/15 text-success", MT: "bg-info/15 text-info", Horeca: "bg-chart-3/15 text-chart-3" };
+const BADGE: Record<string, string> = { LOKMAN: "bg-info/15 text-info", MOT: "bg-chart-5/15 text-chart-5", HORECA: "bg-danger/15 text-danger", NKA: "bg-warning/15 text-warning", GT: "bg-success/15 text-success", MT: "bg-info/15 text-info", Horeca: "bg-chart-3/15 text-chart-3" };
 function RepPicker({ reps, selected, setSelected }: { reps: Rep[]; selected: string[]; setSelected: (s: string[]) => void }) {
   const [q, setQ] = useState("");
   const all = selected.length === reps.length;
   const toggle = (id: string) => setSelected(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   const quick: [string, () => void][] = [
     ["Pilih Semua GT", () => setSelected(reps.filter((r) => r.channel === "GT").map((r) => r.id))],
-    ["Pilih Semua Modern (NKA / MOT / LOKMAN)", () => setSelected(reps.filter((r) => r.channel === "NKA" || r.channel === "MT").map((r) => r.id))],
+    ["Pilih Semua Modern (NKA / MOT)", () => setSelected(reps.filter((r) => r.channel === "NKA" || r.channel === "MT").map((r) => r.id))],
     ["Reset Pilihan", () => setSelected(reps.map((r) => r.id))],
   ];
   return (

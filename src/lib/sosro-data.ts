@@ -5,7 +5,7 @@ export interface Rep { id: string; name: string; channel: Channel; badge: string
 
 // Salesman master hierarchy (id = normalized DMS NAMASALESMAN key)
 export const REPS: Rep[] = [
-  { id: "NANANG", name: "Nanang", channel: "MT", badge: "LOKMAN", weight: 1.1 },
+  { id: "NANANG", name: "Nanang", channel: "Horeca", badge: "HORECA", weight: 1.1 },
   { id: "NOVITA", name: "Novita", channel: "MT", badge: "MOT", weight: 0.9 },
   { id: "NKA SOS", name: "NKA SOS", channel: "NKA", badge: "NKA", weight: 1.6 },
   { id: "BACHTIAR", name: "Bachtiar", channel: "GT", badge: "GT", weight: 1.2 },
