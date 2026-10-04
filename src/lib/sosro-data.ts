@@ -78,7 +78,7 @@ export const STOCK: StockItem[] = [
   { code: "TCS25", name: "Teh Celup Sosro", group: "RTS", pack: "48 / 25 Sachet", pcsPerCtn: 48, price: 210000, ctn: 380, bdp: 50, avg: 22 },
   { code: "TSD40", name: "Teh Seduh Sosro", group: "RTS", pack: "40 / 40 Gr", pcsPerCtn: 40, price: 165000, ctn: 150, bdp: 0, avg: 25 },
 ];
-export const TARGET_DOI = 21;
+export const TARGET_DOI = 45;
 
 export const JUTA = 1_000_000;
 export const MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];

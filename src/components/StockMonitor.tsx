@@ -6,18 +6,18 @@ import { STOCK, STOCK_GROUPS, TARGET_DOI, type StockGroup, type StockItem } from
 
 type Status = "all" | "kritis" | "waspada" | "aman" | "over";
 const doiOf = (s: StockItem) => (s.ctn + s.bdp) / s.avg;
-const statusOf = (d: number): Exclude<Status, "all"> => (d < 7 ? "kritis" : d < 14 ? "waspada" : d <= 25 ? "aman" : "over");
+const statusOf = (d: number): Exclude<Status, "all"> => (d < 15 ? "kritis" : d <= 30 ? "waspada" : d <= 59 ? "aman" : "over");
 const STATUS_META = {
   kritis: { label: "Kritis", cls: "bg-danger/15 text-danger font-bold" },
   waspada: { label: "Waspada", cls: "bg-warning/15 text-warning" },
   aman: { label: "Aman", cls: "bg-success/15 text-success" },
-  over: { label: "High Stock", cls: "bg-info/15 text-info" },
+  over: { label: "⚠ Overstock", cls: "bg-chart-5/15 text-chart-5" },
 };
 const rp = (v: number) => `Rp ${Math.round(v).toLocaleString("id-ID")}`;
 const n = (v: number) => Math.round(v).toLocaleString("id-ID");
 const reorder = (s: StockItem) => Math.max(0, Math.ceil(s.avg * TARGET_DOI - s.ctn - s.bdp));
 
-export function StockMonitor() {
+export function StockMonitor({ cutoffLabel }: { cutoffLabel: string }) {
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<StockGroup | "All">("All");
   const [status, setStatus] = useState<Status>("all");
@@ -32,14 +32,14 @@ export function StockMonitor() {
   const bdp = STOCK.reduce((a, s) => a + s.bdp, 0);
   const value = STOCK.reduce((a, s) => a + s.ctn * s.price, 0);
   const avgDoi = STOCK.reduce((a, s) => a + doiOf(s), 0) / STOCK.length;
-  const critical = STOCK.filter((s) => doiOf(s) < 7).length;
+  const critical = STOCK.filter((s) => doiOf(s) < 15).length;
 
   const kpis = [
     { icon: Boxes, label: "Stock On-Hand", v: `${n(onHand)} CTN` },
     { icon: Truck, label: "In-Transit / BDP", v: `${n(bdp)} CTN` },
     { icon: Wallet, label: "Nilai Inventori", v: `Rp ${(value / 1e9).toFixed(2)} M` },
     { icon: Clock, label: "Rata-rata DOI Depo", v: `${avgDoi.toFixed(1)} Hari` },
-    { icon: AlertTriangle, label: "SKU Kritis (DOI < 7)", v: `${critical} SKU`, danger: true },
+    { icon: AlertTriangle, label: "SKU Kritis (DOI < 15)", v: `${critical} SKU`, danger: true },
   ];
   const sumRow = (list: StockItem[]) => ({
     ctn: list.reduce((a, s) => a + s.ctn, 0), bdp: list.reduce((a, s) => a + s.bdp, 0),
@@ -53,7 +53,7 @@ export function StockMonitor() {
     <div className="space-y-6">
       <div className="flex items-end gap-4">
         <span className="font-display text-4xl font-semibold text-primary"><Package className="h-9 w-9" /></span>
-        <div><h2 className="font-display text-xl font-semibold">Monitoring Stok & DOI Depo</h2><p className="text-sm text-muted-foreground">Stock command center · target DOI {TARGET_DOI} hari</p></div>
+        <div><h2 className="font-display text-xl font-semibold">Monitoring Stok & DOI Depo</h2><p className="text-sm text-muted-foreground">Posisi Stok per Tanggal: <span className="font-semibold text-primary">{cutoffLabel}</span> · target DOI {TARGET_DOI} hari</p></div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -77,7 +77,7 @@ export function StockMonitor() {
           ))}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {([["all", "Semua"], ["kritis", "🚨 Kritis (DOI < 7)"], ["waspada", "⚠️ Waspada (7-14)"], ["aman", "✅ Aman (14-25)"], ["over", "📦 Overstock (> 25)"]] as const).map(([k, l]) => (
+          {([["all", "Semua"], ["kritis", "🚨 Kritis (DOI < 15)"], ["waspada", "⚠️ Waspada (15-30)"], ["aman", "✅ Aman (31-59)"], ["over", "📦 Overstock (> 59)"]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setStatus(k)} className={cn("rounded-full px-3 py-1.5 text-xs font-semibold", status === k ? "bg-foreground text-background" : "bg-surface text-muted-foreground hover:text-foreground")}>{l}</button>
           ))}
         </div>
