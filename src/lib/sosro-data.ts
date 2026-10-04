@@ -18,16 +18,16 @@ export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "
 // base values in IDR for full team
 const rtdT = [210, 195, 230, 225, 240, 260, 255, 250, 235, 220, 215, 245];
 const rtsT = [70, 65, 75, 72, 80, 85, 82, 80, 76, 72, 70, 78];
-const rtdR = [198, 182, 241, 205, 228, 270, 231, 0, 0, 0, 0, 0];
-const rtsR = [61, 66, 70, 58, 74, 88, 69, 0, 0, 0, 0, 0];
+const rtdR = [198, 182, 241, 205, 228, 270, 231, 244, 226, 238, 0, 0];
+const rtsR = [61, 66, 70, 58, 74, 88, 69, 71, 64, 66, 0, 0];
 const rtdLY = [180, 170, 205, 190, 210, 230, 220, 225, 210, 200, 195, 220];
 const rtsLY = [55, 52, 60, 58, 63, 70, 66, 64, 61, 58, 57, 63];
-export const CLOSED_MONTHS = 7;
+export const CLOSED_MONTHS = 10;
 const JT = 1_000_000;
 export const monthly = MONTHS.map((m, i) => ({
   month: m,
   rtdTarget: rtdT[i]! * JT, rtsTarget: rtsT[i]! * JT,
-  rtdReal: rtdR[i]! * JT, rtsReal: rtsR[i]! * JT,
+  rtdReal: rtdR[i] ? rtdR[i]! * JT + ((i + 3) * 7919337) % 999983 : 0, rtsReal: rtsR[i] ? rtsR[i]! * JT + ((i + 5) * 3571129) % 999979 : 0,
   rtdLY: rtdLY[i]! * JT, rtsLY: rtsLY[i]! * JT,
 }));
 

@@ -52,26 +52,25 @@ function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [period, setPeriod] = useState<Period>("ytd");
   const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(CLOSED_MONTHS - 1);
-  const [cutoff, setCutoff] = useState<"full" | "daily">("full");
-  const [today, setToday] = useState(1);
+  const [month, setMonth] = useState(9);
+  const [cutoff, setCutoff] = useState<"full" | "daily">("daily");
+  const [today, setToday] = useState(4);
   const [targetMode, setTargetMode] = useState<"link" | "manual">("manual");
   const [targets, setTargets] = useState(() => monthly.map((m) => ({ rtd: m.rtdTarget, rts: m.rtsTarget })));
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setToday(new Date().getDate());
     try {
       const d = JSON.parse(localStorage.getItem("sosro-settings") || "{}");
       if (d.selected) setSelected(d.selected); if (d.targetAdj) setTargetAdj(d.targetAdj);
-      if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff);
+      if (d.v === 2) { if (d.year) setYear(d.year); if (d.month != null) setMonth(d.month); if (d.cutoff) setCutoff(d.cutoff); if (d.today) setToday(d.today); }
       if (d.targets?.length === 12) setTargets(d.targets.map((t: { rtd: number; rts: number }) => (t.rtd < 1e6 ? { rtd: t.rtd * JUTA, rts: t.rts * JUTA } : t))); if (d.targetMode) setTargetMode(d.targetMode);
     } catch { /* ignore */ }
     setLoaded(true);
   }, []);
   useEffect(() => {
-    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ selected, targetAdj, year, month, cutoff, targets, targetMode }));
-  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode]);
+    if (loaded) localStorage.setItem("sosro-settings", JSON.stringify({ v: 2, today, selected, targetAdj, year, month, cutoff, targets, targetMode }));
+  }, [loaded, selected, targetAdj, year, month, cutoff, targets, targetMode, today]);
 
   const days = new Date(year, month + 1, 0).getDate();
   const cutDay = cutoff === "full" ? days : Math.min(today, days);
@@ -164,7 +163,7 @@ function Dashboard() {
           {view === "stock" && <StockMonitor cutoffLabel={cutLabel} />}
           {view === "exec" && tab === 0 && (
             <>
-              <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`Periode: ${perLabel} (vs Baseline ${year - 1})`} />
+              <SectionTitle n="01" title="Executive Performance & Gap Monitoring" sub={`${month >= 9 ? `Q3 Closed & MTD ${perLabel}` : `Periode: ${perLabel}`} (vs Baseline ${year - 1})`} />
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="glass-card relative overflow-hidden p-5 glow-primary">
                   <CardHead icon={Target} label="Realisasi vs Target" />
@@ -437,28 +436,59 @@ function BrandSlide({ period, setPeriod, factor, mScale, yScale, perLabel }: { p
   );
 }
 
-function DetailTable({ yd, month, factor, adj }: { yd: { rtdT: number; rtsT: number; rtdR: number; rtsR: number }[]; month: number; factor: number; adj: number }) {
-  const cell = "whitespace-nowrap px-3 py-2 text-right tabular-nums";
+type YD = { rtdT: number; rtsT: number; rtdR: number; rtsR: number; rtdLY: number; rtsLY: number };
+function DetailTable({ yd, month, factor, adj }: { yd: YD[]; month: number; factor: number; adj: number }) {
+  const c = "whitespace-nowrap px-3 py-2 text-right tabular-nums";
+  const num = (v: number) => Math.round(v).toLocaleString("id-ID");
+  const gwt = (a: number, b: number) => {
+    if (!a || !b) return <span className="text-muted-foreground">–</span>;
+    const g = (a / b - 1) * 100;
+    return <span className={g >= 0 ? "text-success" : "text-danger"}>{g >= 0 ? "▲ +" : "▼ "}{g.toFixed(2)}%</span>;
+  };
+  const ach = (r: number, t: number) => (!r || !t ? "–" : `${Math.round((r / t) * 100)}%`);
+  const sum = (idx: number[]) => idx.reduce<YD>((a, i) => { const d = yd[i]!; return { rtdT: a.rtdT + d.rtdT, rtsT: a.rtsT + d.rtsT, rtdR: a.rtdR + d.rtdR, rtsR: a.rtsR + d.rtsR, rtdLY: a.rtdLY + d.rtdLY, rtsLY: a.rtsLY + d.rtsLY }; }, { rtdT: 0, rtsT: 0, rtdR: 0, rtsR: 0, rtdLY: 0, rtsLY: 0 });
+  const layout: (number | [string, number[], "q" | "sm"])[] = [0, 1, 2, ["Q1", [0, 1, 2], "q"], 3, 4, 5, ["Q2", [3, 4, 5], "q"], ["SM 1", [0, 1, 2, 3, 4, 5], "sm"], 6, 7, 8, ["Q3", [6, 7, 8], "q"], 9, 10, 11];
+  const cells = (d: YD, sub?: boolean) => {
+    const tD = d.rtdT * factor * adj, tS = d.rtsT * factor * adj, rD = d.rtdR * factor, rS = d.rtsR * factor, lD = d.rtdLY * factor, lS = d.rtsLY * factor;
+    const g = (a: number, b: number) => sub ? (!a || !b ? "–" : `${a >= b ? "▲ +" : "▼ "}${((a / b - 1) * 100).toFixed(2)}%`) : gwt(a, b);
+    return (<>
+      <td className={c}>{num(lD)}</td><td className={c}>{num(lS)}</td>
+      <td className={cn(c, !sub && "bg-warning/10")}>{num(tD)}</td><td className={cn(c, !sub && "bg-warning/10")}>{num(tS)}</td>
+      <td className={c}>{g(tD, lD)}</td><td className={c}>{g(tS, lS)}</td>
+      <td className={c}>{rD ? num(rD) : "–"}</td><td className={c}>{rS ? num(rS) : "–"}</td>
+      <td className={c}>{ach(rD, tD)}</td><td className={c}>{ach(rS, tS)}</td>
+      <td className={c}>{g(rD, lD)}</td><td className={c}>{g(rS, lS)}</td>
+    </>);
+  };
+  const groups = ["YTD 2025", "Target 2026", "% GWT (Target vs '25)", "Realisasi YTD 2026", "% Ach (Real vs Target '26)", "% GWT ('26 vs '25)"];
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-xs">
+      <table className="min-w-max w-full text-xs">
         <thead className="bg-surface text-muted-foreground">
-          <tr><th className="px-3 py-2 text-left">Bulan</th>
-            {["Target RTD", "Real RTD", "Ach RTD", "Target RTS", "Real RTS", "Ach RTS", "Gap Total"].map((h) => <th key={h} className={cell}>{h}</th>)}</tr>
+          <tr>
+            <th rowSpan={2} className="sticky left-0 z-10 bg-surface px-3 py-2 text-left">Bulan</th>
+            {groups.map((g) => <th key={g} colSpan={2} className={cn("whitespace-nowrap border-l border-border px-3 py-2 text-center", g === "Target 2026" ? "bg-warning/20 font-semibold text-warning" : "bg-background/40")}>{g}</th>)}
+          </tr>
+          <tr>{groups.map((g) => ["RTD", "RTS"].map((x) => <th key={g + x} className={cn("px-3 py-1.5 text-right", x === "RTD" && "border-l border-border", g === "Target 2026" && "bg-warning/10")}>{x}</th>))}</tr>
         </thead>
         <tbody>
-          {monthly.map((m, i) => {
-            const d = yd[i]!;
-            const tR = d.rtdT * factor * adj, rR = d.rtdR * factor, tS = d.rtsT * factor * adj, rS = d.rtsR * factor;
-            const g = rR + rS - tR - tS, open = !d.rtdR;
+          {layout.map((r) => {
+            if (typeof r === "number") {
+              const active = r === month;
+              return (
+                <tr key={r} className={cn("border-t border-border hover:bg-surface/50", active && "bg-primary/15")}>
+                  <td className={cn("sticky left-0 z-10 whitespace-nowrap px-3 py-2 font-semibold", active ? "bg-card" : "bg-card")}>
+                    {MONTHS_ID[r]}{active && <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">MTD</span>}
+                  </td>
+                  {cells(yd[r]!)}
+                </tr>
+              );
+            }
+            const [label, idx, kind] = r;
             return (
-              <tr key={m.month} className={cn("border-t border-border hover:bg-surface/50", i === month && "bg-primary/15 outline outline-1 outline-primary/50")}>
-                <td className="px-3 py-2 font-semibold">{m.month}</td>
-                <td className={cell}>{fmt(tR)}</td><td className={cell}>{open ? "–" : fmt(rR)}</td>
-                <td className={cn(cell, !open && (rR >= tR ? "text-success" : "text-danger"))}>{open ? "–" : pct(rR / tR)}</td>
-                <td className={cell}>{fmt(tS)}</td><td className={cell}>{open ? "–" : fmt(rS)}</td>
-                <td className={cn(cell, !open && (rS >= tS ? "text-success" : "text-danger"))}>{open ? "–" : pct(rS / tS)}</td>
-                <td className={cn(cell, "font-semibold", !open && (g >= 0 ? "text-success" : "text-danger"))}>{open ? "–" : fmt(g)}</td>
+              <tr key={label} className={cn("border-t border-border font-bold", kind === "q" ? "bg-warning text-background" : "bg-warning/25 text-warning")}>
+                <td className={cn("sticky left-0 z-10 px-3 py-2", kind === "q" ? "bg-warning" : "bg-card")}>{label}</td>
+                {cells(sum(idx), true)}
               </tr>
             );
           })}
